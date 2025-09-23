@@ -41,14 +41,14 @@ go-anta (Golang ANTA) is a high-performance network testing framework inspired b
 
 ```bash
 # Clone the repository
-git clone https://github.com/gmckee/ganta.git
-cd ganta
+git clone https://github.com/gmckee/go-anta.git
+cd go-anta
 
 # Build the binary
 make build
 
 # Verify installation
-./bin/ganta --help
+./bin/go-anta --help
 ```
 
 ## Quick Start
@@ -80,7 +80,7 @@ tests:
 3. **Run the tests**:
 
 ```bash
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml
 ```
 
 ### Option 2: Netbox Dynamic Inventory
@@ -88,12 +88,12 @@ tests:
 ```bash
 # Set environment variables
 export NETBOX_URL=https://netbox.example.com
-export NETBOX_TOKEN=your-api-token
+export NETBOX_TOKEN=$TOKEN
 export DEVICE_USERNAME=admin
 export DEVICE_PASSWORD=admin123
 
 # Run tests directly from Netbox
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site=datacenter1,platform=eos" \
   -C catalog.yaml
 ```
@@ -106,35 +106,35 @@ Before running tests, preview your inventory to ensure the correct devices are t
 
 ```bash
 # Show inventory from file
-./bin/ganta inventory -i inventory.yaml
+./bin/go-anta inventory -i inventory.yaml
 
 # Show inventory from Netbox
-./bin/ganta inventory \
+./bin/go-anta inventory \
   --netbox-url https://netbox.example.com \
   --netbox-token $TOKEN \
   --netbox-query "site=dc1"
 
 # Show inventory with additional metadata
-./bin/ganta inventory -i inventory.yaml --show-tags --show-extra
+./bin/go-anta inventory -i inventory.yaml --show-tags --show-extra
 
 # Export inventory in different formats
-./bin/ganta inventory -i inventory.yaml -f json
-./bin/ganta inventory -i inventory.yaml -f yaml
-./bin/ganta inventory -i inventory.yaml -f count  # Just show device count
+./bin/go-anta inventory -i inventory.yaml -f json
+./bin/go-anta inventory -i inventory.yaml -f yaml
+./bin/go-anta inventory -i inventory.yaml -f count  # Just show device count
 ```
 
 ### Real-World Example
 
 ```bash
 # Verify Netbox query returns expected devices
-./bin/ganta inventory \
+./bin/go-anta inventory \
   --netbox-url https://netbox.fluidstack.io \
-  --netbox-token 80f4133c031c270d38d4e6ea59fa4cfbaa3525b8 \
+  --netbox-token $TOKEN  \
   --netbox-query "site_id=14&manufacturer_id=35&platform_id=5" \
   --show-tags
 
 # Export Netbox devices to static inventory file
-./bin/ganta inventory \
+./bin/go-anta inventory \
   --netbox-url https://netbox.example.com \
   --netbox-token $TOKEN \
   --netbox-query "site=dc1&status=active" \
@@ -149,19 +149,19 @@ Verify devices are reachable before running tests:
 
 ```bash
 # Check connectivity to devices in inventory
-./bin/ganta check -i inventory.yaml
+./bin/go-anta check -i inventory.yaml
 
 # Dry-run mode - show inventory without connecting
-./bin/ganta check -i inventory.yaml --no-connect
+./bin/go-anta check -i inventory.yaml --no-connect
 
 # Check devices from Netbox
-./bin/ganta check \
+./bin/go-anta check \
   --netbox-url https://netbox.example.com \
   --netbox-token $TOKEN \
   --netbox-query "site=dc1"
 
 # Override credentials
-./bin/ganta check -i inventory.yaml \
+./bin/go-anta check -i inventory.yaml \
   --device-username admin \
   --device-password newpassword
 ```
@@ -185,16 +185,16 @@ The `nrfu` command is the primary testing interface:
 
 ```bash
 # Dry-run to see what would be tested
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --dry-run
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --dry-run
 
 # Run actual tests
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml
 
 # Run with verbose logging
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -v
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -v
 
 # Run with specific concurrency
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -j 20
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -j 20
 ```
 
 ### NRFU Command Options
@@ -223,13 +223,13 @@ The `nrfu` command is the primary testing interface:
 
 ## Netbox Integration
 
-GANTA provides native integration with Netbox for dynamic inventory management.
+go-anta provides native integration with Netbox for dynamic inventory management.
 
 ### Environment Variables
 
 ```bash
 export NETBOX_URL=https://netbox.example.com
-export NETBOX_TOKEN=your-api-token
+export NETBOX_TOKEN=$TOKEN
 export NETBOX_INSECURE=true  # Skip TLS verification if needed
 export DEVICE_USERNAME=admin
 export DEVICE_PASSWORD=admin123
@@ -238,7 +238,7 @@ export DEVICE_ENABLE_PASSWORD=enable123  # Optional
 
 ### Netbox Query Syntax
 
-GANTA supports two query formats:
+go-anta supports two query formats:
 
 #### 1. URL Parameter Format (Precise)
 
@@ -290,14 +290,14 @@ Use slug-based filtering:
 
 ```bash
 # Test all leaf switches in a specific datacenter
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-url https://netbox.fluidstack.io \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "site_id=14&role=leaf&status=active" \
   -C catalog.yaml
 
 # Test all Arista devices in production
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-url https://netbox.fluidstack.io \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "manufacturer=arista,tag=production" \
@@ -305,7 +305,7 @@ Use slug-based filtering:
   --hide success
 
 # Dry-run with device preview
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-url https://netbox.fluidstack.io \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "site_id=14&manufacturer_id=35&platform_id=5" \
@@ -313,7 +313,7 @@ Use slug-based filtering:
   --dry-run
 
 # Test specific tenant's devices
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-url https://netbox.fluidstack.io \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "tenant=customer1,status=active" \
@@ -324,19 +324,19 @@ Use slug-based filtering:
 
 ## Device Filtering
 
-GANTA provides powerful device filtering capabilities to target specific subsets of your inventory.
+go-anta provides powerful device filtering capabilities to target specific subsets of your inventory.
 
 ### Basic Filtering
 
 ```bash
 # Filter by device names
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -d "leaf1,leaf2,spine1"
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -d "leaf1,leaf2,spine1"
 
 # Filter by tags
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -t "production,spine"
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -t "production,spine"
 
 # Combine multiple filters
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -d "leaf1,leaf2" -t "production"
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -d "leaf1,leaf2" -t "production"
 ```
 
 ### Advanced Limit Filtering
@@ -346,7 +346,7 @@ The `--limit` flag provides sophisticated device selection:
 #### 1. Single Hostname
 ```bash
 # Target specific device
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "wdl-200-50-r101-eth-leaf-01" \
   -C catalog.yaml
@@ -355,7 +355,7 @@ The `--limit` flag provides sophisticated device selection:
 #### 2. Comma-Separated List
 ```bash
 # Target multiple specific devices
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "leaf01,leaf02,spine01" \
   -C catalog.yaml
@@ -364,13 +364,13 @@ The `--limit` flag provides sophisticated device selection:
 #### 3. Index-Based Selection
 ```bash
 # Target first device (index 0)
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "0" \
   -C catalog.yaml
 
 # Target third device (index 2)
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "2" \
   -C catalog.yaml
@@ -379,13 +379,13 @@ The `--limit` flag provides sophisticated device selection:
 #### 4. Range-Based Selection
 ```bash
 # Target first 3 devices (indices 0-2)
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "0-2" \
   -C catalog.yaml
 
 # Target devices 5-10
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "4-9" \
   -C catalog.yaml
@@ -394,19 +394,19 @@ The `--limit` flag provides sophisticated device selection:
 #### 5. Wildcard Patterns
 ```bash
 # Target all leaf switches
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "leaf*" \
   -C catalog.yaml
 
 # Target all devices containing "spine"
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "*spine*" \
   -C catalog.yaml
 
 # Target devices with specific pattern
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14" \
   --limit "dc1-*-leaf-*" \
   -C catalog.yaml
@@ -416,19 +416,19 @@ The `--limit` flag provides sophisticated device selection:
 
 ```bash
 # Step 1: Preview inventory
-./bin/ganta inventory \
+./bin/go-anta inventory \
   --netbox-query "site_id=14&manufacturer_id=35" \
   --show-tags
 
 # Step 2: Target specific devices for testing
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14&manufacturer_id=35" \
   --limit "*leaf*" \
   -C catalog.yaml \
   --dry-run
 
 # Step 3: Run actual tests
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site_id=14&manufacturer_id=35" \
   --limit "*leaf*" \
   -C catalog.yaml
@@ -529,7 +529,7 @@ tests:
 Clean, readable format perfect for console output:
 
 ```bash
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml
 ```
 
 ```
@@ -547,7 +547,7 @@ Summary: Total: 3 | Success: 2 | Failure: 1 | Error: 0 | Skipped: 0
 Structured data perfect for automation and integration:
 
 ```bash
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -f json -o results.json
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -f json -o results.json
 ```
 
 ```json
@@ -578,7 +578,7 @@ Structured data perfect for automation and integration:
 Great for spreadsheet analysis:
 
 ```bash
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -f csv -o results.csv
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -f csv -o results.csv
 ```
 
 ### Markdown Format
@@ -586,52 +586,52 @@ Great for spreadsheet analysis:
 Perfect for documentation and reports:
 
 ```bash
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -f markdown -o report.md
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -f markdown -o report.md
 ```
 
 ### Filtering Output
 
 ```bash
 # Hide successful tests to focus on issues
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --hide success
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --hide success
 
 # Hide successful and skipped tests
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --hide success,skipped
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --hide success,skipped
 
 # Show only failures and errors
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --hide success,skipped
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --hide success,skipped
 ```
 
 ## Logging and Debugging
 
 ### Log Levels
 
-By default, GANTA only shows warnings and errors. Enable more detailed logging as needed:
+By default, go-anta only shows warnings and errors. Enable more detailed logging as needed:
 
 ```bash
 # Quiet mode (warnings and errors only) - default
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml
 
 # Verbose mode (debug level)
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -v
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -v
 
 # Specific log levels
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --log-level info
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --log-level debug
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --log-level error
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --log-level info
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --log-level debug
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --log-level error
 ```
 
 ### Debugging Connection Issues
 
 ```bash
 # Enable verbose logging to see connection details
-./bin/ganta check -i inventory.yaml -v
+./bin/go-anta check -i inventory.yaml -v
 
 # Test connectivity to specific device
-./bin/ganta check -i inventory.yaml --limit "problematic-device" -v
+./bin/go-anta check -i inventory.yaml --limit "problematic-device" -v
 
 # Debug with maximum logging
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml --limit "device1" --log-level debug
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml --limit "device1" --log-level debug
 ```
 
 ### Log Output Examples
@@ -853,13 +853,13 @@ ranges:
 
 ### Application Configuration
 
-Create `.ganta.yaml` for application-wide settings:
+Create `.go-anta.yaml` for application-wide settings:
 
 ```yaml
-# .ganta.yaml
+# .go-anta.yaml
 log:
   level: "info"              # debug, info, warn, error
-  file: "ganta.log"          # Optional log file
+  file: "go-anta.log"          # Optional log file
   format: "text"             # text, json
 
 device:
@@ -886,7 +886,7 @@ netbox:
 
 ### Environment Variables
 
-GANTA supports extensive environment variable configuration:
+go-anta supports extensive environment variable configuration:
 
 ```bash
 # Netbox Configuration
@@ -899,10 +899,10 @@ export DEVICE_USERNAME=admin
 export DEVICE_PASSWORD=admin123
 export DEVICE_ENABLE_PASSWORD=enable123
 
-# Application Settings (prefix with GANTA_)
-export GANTA_LOG_LEVEL=debug
-export GANTA_DEVICE_TIMEOUT=60s
-export GANTA_TEST_CONCURRENCY=20
+# Application Settings (prefix with go-anta_)
+export go-anta_LOG_LEVEL=debug
+export go-anta_DEVICE_TIMEOUT=60s
+export go-anta_TEST_CONCURRENCY=20
 ```
 
 ## Troubleshooting
@@ -912,7 +912,7 @@ export GANTA_TEST_CONCURRENCY=20
 1. **Connection Timeouts**
    ```bash
    # Increase timeout
-   ./bin/ganta check -i inventory.yaml --log-level debug
+   ./bin/go-anta check -i inventory.yaml --log-level debug
    ```
 
 2. **TLS Certificate Errors**
@@ -927,7 +927,7 @@ export GANTA_TEST_CONCURRENCY=20
 3. **Authentication Failures**
    ```bash
    # Override credentials
-   ./bin/ganta check -i inventory.yaml \
+   ./bin/go-anta check -i inventory.yaml \
      --device-username admin \
      --device-password newpassword
    ```
@@ -935,7 +935,7 @@ export GANTA_TEST_CONCURRENCY=20
 4. **Netbox Query Issues**
    ```bash
    # Test query separately
-   ./bin/ganta inventory \
+   ./bin/go-anta inventory \
      --netbox-url $NETBOX_URL \
      --netbox-token $NETBOX_TOKEN \
      --netbox-query "your-query" \
@@ -958,10 +958,10 @@ go build -o debug cmd/debug/main.go
 
 ```bash
 # Increase concurrency for faster execution
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -j 50
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -j 50
 
 # Reduce concurrency for stability
-./bin/ganta nrfu -i inventory.yaml -C catalog.yaml -j 5
+./bin/go-anta nrfu -i inventory.yaml -C catalog.yaml -j 5
 
 # Use caching to improve performance
 # (Enabled by default, disable with --no-cache if needed)
@@ -980,8 +980,8 @@ Contributions are welcome! This project follows standard Go development practice
 ### Development Setup
 
 ```bash
-git clone https://github.com/gmckee/ganta.git
-cd ganta
+git clone https://github.com/gmckee/go-anta.git
+cd go-anta
 go mod tidy
 make test
 make build
@@ -1005,7 +1005,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ```bash
 # Full production spine-leaf validation
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-url https://netbox.fluidstack.io \
   --netbox-token $PROD_TOKEN \
   --netbox-query "site=prod-dc1,status=active" \
@@ -1020,7 +1020,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ```bash  
 # Quick staging verification
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site=staging,tag=ready-for-prod" \
   -C staging-catalog.yaml \
   --limit "*leaf*" \
@@ -1031,13 +1031,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ```bash
 # Pre-maintenance check
-./bin/ganta check \
+./bin/go-anta check \
   --netbox-query "site=dc1,tenant=customer1" \
   --device-username maint_user \
   --device-password $MAINT_PASSWORD
 
 # Post-maintenance validation  
-./bin/ganta nrfu \
+./bin/go-anta nrfu \
   --netbox-query "site=dc1,tenant=customer1" \
   -C post-maint-catalog.yaml \
   --format markdown \
