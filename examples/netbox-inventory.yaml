@@ -1,0 +1,57 @@
+# Example Netbox inventory configuration
+
+# Netbox connection settings
+netbox:
+  url: "https://netbox.example.com"     # Netbox URL (or use NETBOX_URL env var)
+  token: "your-api-token-here"          # API token (or use NETBOX_TOKEN env var)
+  insecure: false                        # Skip TLS verification
+  timeout: "30s"                         # API request timeout
+
+# Query parameters to filter devices
+query:
+  # Location filters
+  site: "dc1"                            # Site slug
+  # site_id: 1                          # Or use site ID
+  region: "us-east"                      # Region slug
+  
+  # Device filters
+  role: "leaf"                           # Device role slug (e.g., leaf, spine, core)
+  # role_id: 5                          # Or use role ID
+  device_type: "DCS-7280SR-48C6"        # Device type model
+  manufacturer: "arista"                 # Manufacturer slug
+  platform: "eos"                        # Platform slug
+  
+  # Status filter (default: active)
+  status: "active"                       # active, planned, staged, failed, inventory, decommissioning, offline
+  
+  # Tenant/ownership
+  tenant: "production"                   # Tenant slug
+  
+  # Name filters
+  # name: "leaf1"                        # Exact device name
+  # name__ic: "leaf"                     # Name contains (case insensitive)
+  
+  # Tags (devices must have ALL specified tags)
+  tags:
+    - "production"
+    - "monitored"
+  
+  # Custom fields (prefix with cf_ in API)
+  custom_fields:
+    environment: "production"
+    sla: "gold"
+  
+  # Query options
+  limit: 100                             # Max devices to retrieve (0 = all)
+  # offset: 0                            # Pagination offset
+  include_inactive: false                # Include non-active devices
+
+# Default credentials for devices
+# Can be overridden by custom fields in Netbox
+credentials:
+  username: "admin"                      # Or use DEVICE_USERNAME env var
+  password: "admin123"                   # Or use DEVICE_PASSWORD env var
+  enable_password: ""                    # Or use DEVICE_ENABLE_PASSWORD env var
+  port: 443                              # eAPI port
+  insecure: true                         # Allow self-signed certificates
+  timeout: "30s"                         # Device connection timeout

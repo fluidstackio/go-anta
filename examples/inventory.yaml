@@ -1,0 +1,52 @@
+# Example inventory file for GANTA
+
+devices:
+  - name: "leaf1"
+    host: "192.168.1.10"
+    port: 443
+    username: "admin"
+    password: "admin123"
+    tags: ["leaf", "datacenter", "production"]
+    insecure: true
+    
+  - name: "leaf2"
+    host: "192.168.1.11"
+    port: 443
+    username: "admin"
+    password: "admin123"
+    tags: ["leaf", "datacenter", "production"]
+    insecure: true
+    
+  - name: "spine1"
+    host: "192.168.1.1"
+    port: 443
+    username: "admin"
+    password: "admin123"
+    tags: ["spine", "datacenter", "production"]
+    insecure: true
+    
+  - name: "spine2"
+    host: "192.168.1.2"
+    port: 443
+    username: "admin"
+    password: "admin123"
+    tags: ["spine", "datacenter", "production"]
+    insecure: true
+
+# Network-based discovery (will scan all IPs in the subnet)
+networks:
+  - network: "192.168.2.0/24"
+    username: "admin"
+    password: "admin123"
+    tags: ["management", "lab"]
+    insecure: true
+
+# Range-based discovery (will scan IPs from start to end)
+ranges:
+  - start: "10.0.1.1"
+    end: "10.0.1.10"
+    username: "admin"
+    password: "admin123"
+    tags: ["test", "lab"]
+    port: 443
+    insecure: true

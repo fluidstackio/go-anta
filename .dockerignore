@@ -1,0 +1,63 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*.test
+*.out
+coverage.html
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Config files that shouldn't be in image
+inventory.yaml
+catalog.yaml
+config.yaml
+.go-anta.yaml
+
+# Output files
+output/
+*.log
+*.json
+*.csv
+
+# Development files
+.env
+.env.local
+Makefile
+go.work
+go.work.sum
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore

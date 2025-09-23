@@ -1,0 +1,24 @@
+# Example configuration file for GANTA
+
+# Logging configuration
+log:
+  level: "info"  # Options: debug, info, warn, error
+  file: ""       # Leave empty to log to stdout
+
+# Device connection settings
+device:
+  timeout: "30s"           # Connection timeout
+  max_connections: 100     # Maximum concurrent device connections
+  retry_attempts: 3        # Number of retry attempts for failed connections
+  retry_delay: "5s"        # Delay between retry attempts
+
+# Test execution settings
+test:
+  max_concurrency: 10      # Maximum concurrent test executions
+  cache_ttl: "60s"         # Command cache TTL
+  cache_size: 128          # Maximum number of cached commands
+
+# Reporter settings
+reporter:
+  default_format: "table"  # Options: table, csv, json, markdown
+  output_file: ""          # Leave empty to output to stdout

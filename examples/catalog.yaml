@@ -1,0 +1,122 @@
+# Example test catalog for GANTA
+
+tests:
+  # Connectivity Tests
+  - name: "VerifyReachability"
+    module: "connectivity"
+    categories: ["connectivity", "basic"]
+    inputs:
+      hosts:
+        - destination: "8.8.8.8"
+          vrf: "default"
+          reachable: true
+        - destination: "1.1.1.1"
+          vrf: "default"
+          reachable: true
+      repeat: 2
+      size: 100
+
+  - name: "VerifyLLDPNeighbors"
+    module: "connectivity"
+    categories: ["connectivity", "lldp"]
+    inputs:
+      interfaces:
+        - interface: "Ethernet1"
+          neighbor_device: "spine1"
+          neighbor_port: "Ethernet1"
+        - interface: "Ethernet2"
+          neighbor_device: "spine2"
+          neighbor_port: "Ethernet1"
+
+  # Hardware Tests
+  - name: "VerifyTemperature"
+    module: "hardware"
+    categories: ["hardware", "environmental"]
+    inputs:
+      check_temp_sensors: true
+      failure_margin: 5
+
+  - name: "VerifyTransceivers"
+    module: "hardware"
+    categories: ["hardware", "optics"]
+    inputs:
+      check_manufacturer: true
+      manufacturers:
+        - "Arista Networks"
+        - "Finisar"
+
+  - name: "VerifyPowerSupplies"
+    module: "hardware"
+    categories: ["hardware", "power"]
+    inputs:
+      minimum_supplies: 2
+
+  # Routing Tests
+  - name: "VerifyBGPPeers"
+    module: "routing"
+    categories: ["routing", "bgp"]
+    inputs:
+      peers:
+        - peer: "10.0.0.1"
+          state: "Established"
+          asn: 65001
+        - peer: "10.0.0.2"
+          state: "Established"
+          asn: 65002
+
+  - name: "VerifyOSPFNeighbors"
+    module: "routing"
+    categories: ["routing", "ospf"]
+    inputs:
+      neighbors:
+        - interface: "Ethernet1"
+          state: "Full"
+        - interface: "Ethernet2"
+          state: "Full"
+
+  - name: "VerifyStaticRoutes"
+    module: "routing"
+    categories: ["routing", "static"]
+    inputs:
+      routes:
+        - prefix: "0.0.0.0/0"
+          next_hop: "192.168.1.1"
+          vrf: "default"
+
+  # System Tests
+  - name: "VerifyEOSVersion"
+    module: "system"
+    categories: ["system", "software"]
+    inputs:
+      minimum_version: "4.25.0"
+      versions:
+        - "4.28.0F"
+        - "4.27.3F"
+        - "4.26.5M"
+
+  - name: "VerifyUptime"
+    module: "system"
+    categories: ["system", "availability"]
+    inputs:
+      minimum_uptime: 3600
+
+  - name: "VerifyNTP"
+    module: "system"
+    categories: ["system", "time"]
+    inputs:
+      servers:
+        - server: "0.pool.ntp.org"
+          synchronized: true
+        - server: "1.pool.ntp.org"
+          synchronized: true
+
+  - name: "VerifyDNSResolution"
+    module: "system"
+    categories: ["system", "network"]
+    inputs:
+      servers:
+        - "8.8.8.8"
+        - "8.8.4.4"
+      fqdn:
+        - "www.google.com"
+        - "www.arista.com"
