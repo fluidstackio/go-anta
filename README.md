@@ -980,7 +980,7 @@ Contributions are welcome! This project follows standard Go development practice
 ### Development Setup
 
 ```bash
-git clone https://github.com/gmckee/go-anta.git
+git clone https://github.com/gavmckee/go-anta.git
 cd go-anta
 go mod tidy
 make test
@@ -1043,5 +1043,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
   --format markdown \
   --output maintenance-report.md
 ```
-
-This comprehensive README reflects all the excellent work that has been implemented, including the Netbox integration, advanced device filtering, logging improvements, and the robust device connectivity features that were developed and tested.
