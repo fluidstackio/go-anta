@@ -24,6 +24,7 @@ func RegisterAllTests() {
 	_ = registry.Register("hardware", "VerifyPowerSupplies", NewVerifyPowerSupplies)
 
 	_ = registry.Register("routing", "VerifyBGPPeers", routing.NewVerifyBGPPeers)
+	_ = registry.Register("routing", "VerifyBGPUnnumbered", routing.NewVerifyBGPUnnumbered)
 	_ = registry.Register("routing", "VerifyOSPFNeighbors", routing.NewVerifyOSPFNeighbors)
 	_ = registry.Register("routing", "VerifyStaticRoutes", routing.NewVerifyStaticRoutes)
 

@@ -1,0 +1,26 @@
+# Example catalog for testing BGP unnumbered configurations
+tests:
+  # BGP Unnumbered underlay test
+  - name: "VerifyBGPUnnumbered"
+    module: "routing"
+    categories: ["routing", "bgp", "unnumbered"]
+    inputs:
+      vrf: "default"
+      interfaces:
+        # Leaf-to-Spine connections using BGP unnumbered
+        - interface: "Et10/1"
+          remote_asn: 65103
+          expected_state: "Established"
+          description: "Connection to spine1"
+        
+        - interface: "Et9/1"
+          remote_asn: 65104
+          expected_state: "Established"
+          description: "Connection to spine2"
+
+  # System health check
+  - name: "VerifyUptime"
+    module: "system"
+    categories: ["health"]
+    inputs:
+      minimum_uptime: 3600  # 1 hour
