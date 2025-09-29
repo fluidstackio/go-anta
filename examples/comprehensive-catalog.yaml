@@ -1,0 +1,41 @@
+# Comprehensive catalog with multiple test types
+tests:
+  # System tests
+  - name: "VerifyEOSVersion"
+    module: "system"
+    categories: ["system", "version"]
+    inputs:
+      minimum_version: "4.25.0"
+
+  - name: "VerifyUptime"
+    module: "system"
+    categories: ["health"]
+    inputs:
+      minimum_uptime: 3600  # 1 hour
+
+  # BGP tests
+  - name: "VerifyBGPUnnumbered"
+    module: "routing"
+    categories: ["routing", "bgp", "unnumbered"]
+    inputs:
+      vrf: "default"
+      interfaces:
+        - interface: "Et10/1"
+          remote_asn: 65103
+          expected_state: "Established"
+          description: "Connection to spine1"
+        
+        - interface: "Et9/1"
+          remote_asn: 65104
+          expected_state: "Established"
+          description: "Connection to spine2"
+
+  - name: "VerifyBGPPeers"
+    module: "routing"
+    categories: ["routing", "bgp"]
+    inputs:
+      peers:
+        - peer: "10.0.0.1"
+          state: "Established"
+          asn: 65001
+          vrf: "default"

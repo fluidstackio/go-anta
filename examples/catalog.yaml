@@ -64,35 +64,33 @@ tests:
           state: "Established"
           asn: 65002
 
-  - name: "VerifyOSPFNeighbors"
-    module: "routing"
-    categories: ["routing", "ospf"]
-    inputs:
-      neighbors:
-        - interface: "Ethernet1"
-          state: "Full"
-        - interface: "Ethernet2"
-          state: "Full"
+  # - name: "VerifyOSPFNeighbors"
+  #   module: "routing"
+  #   categories: ["routing", "ospf"]
+  #   inputs:
+  #     neighbors:
+  #       - interface: "Ethernet1"
+  #         state: "Full"
+  #       - interface: "Ethernet2"
+  #         state: "Full"
 
-  - name: "VerifyStaticRoutes"
-    module: "routing"
-    categories: ["routing", "static"]
-    inputs:
-      routes:
-        - prefix: "0.0.0.0/0"
-          next_hop: "192.168.1.1"
-          vrf: "default"
+  # - name: "VerifyStaticRoutes"
+  #   module: "routing"
+  #   categories: ["routing", "static"]
+  #   inputs:
+  #     routes:
+  #       - prefix: "0.0.0.0/0"
+  #         next_hop: "192.168.1.1"
+  #         vrf: "default"
 
   # System Tests
   - name: "VerifyEOSVersion"
     module: "system"
     categories: ["system", "software"]
     inputs:
-      minimum_version: "4.25.0"
+      minimum_version: "4.34.2.1F"
       versions:
-        - "4.28.0F"
-        - "4.27.3F"
-        - "4.26.5M"
+        - "4.34.2.1F"
 
   - name: "VerifyUptime"
     module: "system"
@@ -120,3 +118,20 @@ tests:
       fqdn:
         - "www.google.com"
         - "www.arista.com"
+
+  - name: "VerifyBGPUnnumbered"
+    module: "routing"
+    categories: ["routing", "bgp", "unnumbered"]
+    inputs:
+      vrf: "default"
+      interfaces:
+        # Leaf-to-Spine connections using BGP unnumbered
+        - interface: "Et10/1"
+          remote_asn: 65103
+          expected_state: "Established"
+          description: "Connection to spine1"
+        
+        - interface: "Et9/1"
+          remote_asn: 65104
+          expected_state: "Established"
+          description: "Connection to spine2"
