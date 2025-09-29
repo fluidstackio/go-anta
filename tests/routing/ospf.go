@@ -9,6 +9,29 @@ import (
 	"github.com/gavmckee/go-anta/internal/test"
 )
 
+// VerifyOSPFNeighbors verifies OSPF neighbor adjacencies and their states.
+//
+// This test validates that OSPF neighbors are present and in the expected adjacency
+// states (typically "Full" for established adjacencies). It ensures proper OSPF
+// operation and network connectivity.
+//
+// Expected Results:
+//   - Success: All specified OSPF neighbors are found with expected adjacency states.
+//   - Failure: A neighbor is missing, has incorrect state, or router ID doesn't match.
+//   - Error: The test will error if OSPF neighbor information cannot be retrieved.
+//
+// Example YAML configuration:
+//   - name: "VerifyOSPFNeighbors"
+//     module: "routing"
+//     inputs:
+//       instance: "1"
+//       neighbors:
+//         - interface: "Ethernet1"
+//           state: "Full"
+//           router_id: "192.168.1.1"
+//         - interface: "Ethernet2"
+//           state: "Full"
+//           router_id: "192.168.1.2"
 type VerifyOSPFNeighbors struct {
 	test.BaseTest
 	Neighbors []OSPFNeighbor `yaml:"neighbors" json:"neighbors"`
@@ -21,7 +44,7 @@ type OSPFNeighbor struct {
 	RouterID  string `yaml:"router_id,omitempty" json:"router_id,omitempty"`
 }
 
-func NewVerifyOSPFNeighbors(inputs map[string]interface{}) (test.Test, error) {
+func NewVerifyOSPFNeighbors(inputs map[string]any) (test.Test, error) {
 	t := &VerifyOSPFNeighbors{
 		BaseTest: test.BaseTest{
 			TestName:        "VerifyOSPFNeighbors",
@@ -32,9 +55,9 @@ func NewVerifyOSPFNeighbors(inputs map[string]interface{}) (test.Test, error) {
 	}
 
 	if inputs != nil {
-		if neighbors, ok := inputs["neighbors"].([]interface{}); ok {
+		if neighbors, ok := inputs["neighbors"].([]any); ok {
 			for _, n := range neighbors {
-				if neighborMap, ok := n.(map[string]interface{}); ok {
+				if neighborMap, ok := n.(map[string]any); ok {
 					neighbor := OSPFNeighbor{
 						State: "Full",
 					}
@@ -92,12 +115,12 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 	issues := []string{}
 	ospfNeighbors := make(map[string]OSPFNeighborInfo)
 
-	if ospfData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if instances, ok := ospfData["instances"].(map[string]interface{}); ok {
-			if instData, ok := instances[t.Instance].(map[string]interface{}); ok {
-				if neighbors, ok := instData["neighbors"].([]interface{}); ok {
+	if ospfData, ok := cmdResult.Output.(map[string]any); ok {
+		if instances, ok := ospfData["instances"].(map[string]any); ok {
+			if instData, ok := instances[t.Instance].(map[string]any); ok {
+				if neighbors, ok := instData["neighbors"].([]any); ok {
 					for _, n := range neighbors {
-						if neighbor, ok := n.(map[string]interface{}); ok {
+						if neighbor, ok := n.(map[string]any); ok {
 							info := OSPFNeighborInfo{}
 							
 							if intf, ok := neighbor["interface"].(string); ok {
@@ -150,7 +173,7 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 	return result, nil
 }
 
-func (t *VerifyOSPFNeighbors) ValidateInput(input interface{}) error {
+func (t *VerifyOSPFNeighbors) ValidateInput(input any) error {
 	if len(t.Neighbors) == 0 {
 		return fmt.Errorf("at least one OSPF neighbor must be specified")
 	}

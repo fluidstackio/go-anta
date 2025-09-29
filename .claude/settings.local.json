@@ -4,7 +4,19 @@
       "Bash(mkdir:*)",
       "Bash(go get:*)",
       "Bash(./bin/go-anta:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "WebFetch(domain:anta.arista.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(find:*)",
+      "Bash(./bin/go-anta-debug:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(/tmp/claude/check_godocs.sh:*)",
+      "Bash(python3:*)",
+      "Bash(go vet:*)"
     ],
     "deny": [],
     "ask": []

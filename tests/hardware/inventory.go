@@ -5,9 +5,31 @@ import (
 	"fmt"
 
 	"github.com/gavmckee/go-anta/internal/device"
+	"github.com/gavmckee/go-anta/internal/platform"
 	"github.com/gavmckee/go-anta/internal/test"
 )
 
+// VerifyInventory verifies that the device hardware inventory meets specified requirements.
+//
+// This test performs the following checks:
+//  1. Validates minimum memory requirements if specified.
+//  2. Validates minimum flash storage requirements if specified.
+//  3. Verifies that all required modules are present in the inventory.
+//
+// Expected Results:
+//   - Success: All specified hardware requirements are met.
+//   - Failure: Insufficient memory/flash or required modules are missing.
+//   - Error: Unable to retrieve hardware inventory information.
+//
+// Example YAML configuration:
+//   - name: "VerifyInventory"
+//     module: "hardware"
+//     inputs:
+//       minimum_memory: 8192  # in MB
+//       minimum_flash: 4096   # in MB
+//       required_modules:
+//         - "DCS-7050SX3-48YC8"
+//         - "PWR-460AC-F"
 type VerifyInventory struct {
 	test.BaseTest
 	MinimumMemory   int64 `yaml:"minimum_memory,omitempty" json:"minimum_memory,omitempty"`
@@ -15,7 +37,7 @@ type VerifyInventory struct {
 	RequiredModules []string `yaml:"required_modules,omitempty" json:"required_modules,omitempty"`
 }
 
-func NewVerifyInventory(inputs map[string]interface{}) (test.Test, error) {
+func NewVerifyInventory(inputs map[string]any) (test.Test, error) {
 	t := &VerifyInventory{
 		BaseTest: test.BaseTest{
 			TestName:        "VerifyInventory",
@@ -37,7 +59,7 @@ func NewVerifyInventory(inputs map[string]interface{}) (test.Test, error) {
 			t.MinimumFlash = int64(flash)
 		}
 
-		if modules, ok := inputs["required_modules"].([]interface{}); ok {
+		if modules, ok := inputs["required_modules"].([]any); ok {
 			for _, m := range modules {
 				if module, ok := m.(string); ok {
 					t.RequiredModules = append(t.RequiredModules, module)
@@ -57,6 +79,11 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 		Categories: t.Categories(),
 	}
 
+	// Skip on virtual/lab platforms where physical hardware inventory is not meaningful
+	if skipResult := platform.SkipOnVirtualPlatforms(dev, t.Name(), t.Categories(), "physical hardware inventory validation is not meaningful"); skipResult != nil {
+		return skipResult, nil
+	}
+
 	cmd := device.Command{
 		Template: "show version",
 		Format:   "json",
@@ -72,7 +99,7 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 
 	issues := []string{}
 
-	if versionData, ok := cmdResult.Output.(map[string]interface{}); ok {
+	if versionData, ok := cmdResult.Output.(map[string]any); ok {
 		if t.MinimumMemory > 0 {
 			if memTotal, ok := versionData["memTotal"].(float64); ok {
 				memTotalMB := int64(memTotal / 1024 / 1024)
@@ -103,11 +130,11 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 
 		invResult, err := dev.Execute(ctx, invCmd)
 		if err == nil {
-			if invData, ok := invResult.Output.(map[string]interface{}); ok {
-				if systemInfo, ok := invData["systemInformation"].([]interface{}); ok {
+			if invData, ok := invResult.Output.(map[string]any); ok {
+				if systemInfo, ok := invData["systemInformation"].([]any); ok {
 					modules := make(map[string]bool)
 					for _, item := range systemInfo {
-						if itemData, ok := item.(map[string]interface{}); ok {
+						if itemData, ok := item.(map[string]any); ok {
 							if name, ok := itemData["name"].(string); ok {
 								modules[name] = true
 							}
@@ -135,7 +162,7 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 	return result, nil
 }
 
-func (t *VerifyInventory) ValidateInput(input interface{}) error {
+func (t *VerifyInventory) ValidateInput(input any) error {
 	if t.MinimumMemory < 0 {
 		return fmt.Errorf("minimum memory cannot be negative")
 	}

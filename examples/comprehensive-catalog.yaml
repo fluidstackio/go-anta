@@ -1,6 +1,8 @@
-# Comprehensive catalog with multiple test types
+# Comprehensive BGP Test Catalog - Matching ANTA Python Implementation
+# Based on https://github.com/aristanetworks/anta/blob/main/anta/tests/routing/bgp.py
+
 tests:
-  # System tests
+  # ==================== System Tests ====================
   - name: "VerifyEOSVersion"
     module: "system"
     categories: ["system", "version"]
@@ -13,29 +15,492 @@ tests:
     inputs:
       minimum_uptime: 3600  # 1 hour
 
-  # BGP tests
+  # ==================== Core BGP Tests ====================
+
+  # 1. VerifyBGPPeerCount - Verifies count of BGP peers for address families
+  - name: "VerifyBGPPeerCount"
+    module: "routing"
+    categories: ["routing", "bgp", "peer-count"]
+    inputs:
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+          num_peers: 4
+          check_peer_state: true
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "PROD"
+          num_peers: 2
+          check_peer_state: true
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+          num_peers: 3
+          check_peer_state: true
+        - afi: "evpn"
+          num_peers: 2
+          check_peer_state: false
+
+  # 2. VerifyBGPPeersHealth - Verifies health of all BGP peers
+  - name: "VerifyBGPPeersHealth"
+    module: "routing"
+    categories: ["routing", "bgp", "health"]
+    inputs:
+      minimum_established_time: 300  # 5 minutes
+      check_tcp_queues: true
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+        - afi: "ipv4"
+          safi: "multicast"
+          vrf: "default"
+        - afi: "evpn"
+
+  # 3. VerifyBGPSpecificPeers - Verifies specific BGP peers health
+  - name: "VerifyBGPSpecificPeers"
+    module: "routing"
+    categories: ["routing", "bgp", "specific-peers"]
+    inputs:
+      minimum_established_time: 300
+      check_tcp_queues: true
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+          peers:
+            - "10.0.0.1"
+            - "10.0.0.2"
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+          peers:
+            - "2001:db8::1"
+            - "2001:db8::2"
+        - afi: "evpn"
+          peers:
+            - "192.168.100.1"
+            - "192.168.100.2"
+
+  # 4. VerifyBGPPeerSession - Verifies individual BGP peer sessions
+  - name: "VerifyBGPPeerSession"
+    module: "routing"
+    categories: ["routing", "bgp", "session"]
+    inputs:
+      minimum_established_time: 300
+      check_tcp_queues: true
+      bgp_peers:
+        - peer_address: "10.0.0.1"
+          vrf: "default"
+        - peer_address: "10.0.0.2"
+          vrf: "default"
+        - peer_address: "192.168.1.1"
+          vrf: "MGMT"
+        # BGP Unnumbered (RFC5549)
+        - interface: "Ethernet1"
+          vrf: "default"
+        - interface: "Ethernet2"
+          vrf: "default"
+
+  # 5. VerifyBGPExchangedRoutes - Verifies advertised and received routes
+  - name: "VerifyBGPExchangedRoutes"
+    module: "routing"
+    categories: ["routing", "bgp", "routes"]
+    inputs:
+      check_active: true
+      bgp_peers:
+        - peer_address: "172.30.255.5"
+          vrf: "default"
+          advertised_routes:
+            - "192.0.254.5/32"
+            - "10.0.0.0/24"
+            - "10.1.0.0/24"
+          received_routes:
+            - "192.0.255.4/32"
+            - "10.2.0.0/24"
+            - "10.3.0.0/24"
+        - peer_address: "172.30.255.6"
+          vrf: "PROD"
+          advertised_routes:
+            - "192.168.0.0/16"
+            - "172.16.0.0/12"
+          received_routes:
+            - "10.0.0.0/8"
+
+  # 6. VerifyBGPPeerMPCaps - Verifies multiprotocol capabilities
+  - name: "VerifyBGPPeerMPCaps"
+    module: "routing"
+    categories: ["routing", "bgp", "capabilities"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.0.0.1"
+          vrf: "default"
+          capabilities:
+            - "ipv4Unicast"
+            - "ipv4MplsLabels"
+        - peer_address: "10.0.0.2"
+          vrf: "default"
+          capabilities:
+            - "ipv4Unicast"
+            - "ipv4MplsVpn"
+            - "ipv6Unicast"
+        - peer_address: "192.168.100.1"
+          vrf: "default"
+          capabilities:
+            - "l2VpnEvpn"
+
+  # 7. VerifyBGPPeerASNCap - Verifies four-octet ASN capability
+  - name: "VerifyBGPPeerASNCap"
+    module: "routing"
+    categories: ["routing", "bgp", "capabilities"]
+    inputs:
+      bgp_peers:
+        - peer_address: "172.30.11.1"
+          vrf: "default"
+        - peer_address: "172.30.11.2"
+          vrf: "MGMT"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+
+  # 8. VerifyBGPPeerRouteRefreshCap - Verifies route refresh capability
+  - name: "VerifyBGPPeerRouteRefreshCap"
+    module: "routing"
+    categories: ["routing", "bgp", "capabilities"]
+    inputs:
+      bgp_peers:
+        - peer_address: "172.30.255.1"
+          vrf: "default"
+        - peer_address: "172.30.255.2"
+          vrf: "PROD"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+
+  # 9. VerifyBGPPeerMD5Auth - Verifies MD5 authentication
+  - name: "VerifyBGPPeerMD5Auth"
+    module: "routing"
+    categories: ["routing", "bgp", "security"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.255.0.1"
+          vrf: "default"
+        - peer_address: "10.255.0.2"
+          vrf: "default"
+        - peer_address: "172.16.0.1"
+          vrf: "PROD"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+
+  # 10. VerifyEVPNType2Route - Verifies EVPN Type-2 routes
+  - name: "VerifyEVPNType2Route"
+    module: "routing"
+    categories: ["routing", "evpn"]
+    inputs:
+      vxlan_endpoints:
+        - address: "192.168.20.102"
+          vni: 10020
+        - address: "192.168.30.102"
+          vni: 10030
+      mac_entries:
+        - mac_address: "aa:bb:cc:dd:ee:ff"
+          vni: 10020
+        - mac_address: "11:22:33:44:55:66"
+          vni: 10030
+
+  # 11. VerifyBGPAdvCommunities - Verifies advertised communities
+  - name: "VerifyBGPAdvCommunities"
+    module: "routing"
+    categories: ["routing", "bgp", "communities"]
+    inputs:
+      bgp_peers:
+        - peer_address: "172.30.11.17"
+          vrf: "default"
+          advertised_communities:
+            - "standard"
+            - "extended"
+            - "large"
+        - peer_address: "172.30.11.18"
+          vrf: "default"
+          advertised_communities:
+            - "standard"
+            - "extended"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+          advertised_communities:
+            - "standard"
+            - "large"
+
+  # 12. VerifyBGPTimers - Verifies BGP timers configuration
+  - name: "VerifyBGPTimers"
+    module: "routing"
+    categories: ["routing", "bgp", "timers"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.1.0.1"
+          vrf: "default"
+          hold_time: 180
+          keep_alive_time: 60
+        - peer_address: "10.1.0.2"
+          vrf: "default"
+          hold_time: 180
+          keep_alive_time: 60
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+          hold_time: 180
+          keep_alive_time: 60
+
+  # 13. VerifyBGPPeerDropStats - Verifies BGP NLRI drop statistics
+  - name: "VerifyBGPPeerDropStats"
+    module: "routing"
+    categories: ["routing", "bgp", "statistics"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.100.0.8"
+          vrf: "default"
+          drop_stats:
+            - inDropAsloop: 0
+            - inDropClusterIdLoop: 0
+            - inDropMalformedMpbgp: 0
+            - inDropOrigId: 0
+            - inDropNhLocal: 0
+            - inDropNhAfV6Ipv4: 0
+            - prefixDroppedMartianV4: 0
+            - prefixDroppedMaxRouteLimitViolated: 0
+            - prefixDroppedMartianV6: 0
+        - peer_address: "10.100.0.9"
+          vrf: "PROD"
+          drop_stats:
+            - inDropAsloop: 0
+            - inDropOrigId: 0
+
+  # 14. VerifyBGPPeerUpdateErrors - Verifies BGP update error counters
+  - name: "VerifyBGPPeerUpdateErrors"
+    module: "routing"
+    categories: ["routing", "bgp", "errors"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.100.0.8"
+          vrf: "default"
+          update_errors:
+            - inUpdErrWithdraw: 0
+            - inUpdErrIgnore: 0
+            - inUpdErrDisableAfiSafi: 0
+            - disabledAfiSafi: "ipv4Unicast"
+            - lastUpdErrTime: 0
+        - peer_address: "10.100.0.9"
+          vrf: "PROD"
+          update_errors:
+            - inUpdErrWithdraw: 0
+            - inUpdErrIgnore: 0
+
+  # 15. VerifyBgpRouteMaps - Verifies BGP route-maps configuration
+  - name: "VerifyBgpRouteMaps"
+    module: "routing"
+    categories: ["routing", "bgp", "route-maps"]
+    inputs:
+      bgp_peers:
+        - peer_address: "172.16.255.1"
+          vrf: "default"
+          inbound_route_map: "RM-SPINE-PEERS-IN"
+          outbound_route_map: "RM-SPINE-PEERS-OUT"
+        - peer_address: "172.16.255.2"
+          vrf: "default"
+          inbound_route_map: "RM-SPINE-PEERS-IN"
+          outbound_route_map: "RM-SPINE-PEERS-OUT"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+          inbound_route_map: "RM-LEAF-PEERS-IN"
+          outbound_route_map: "RM-LEAF-PEERS-OUT"
+
+  # 16. VerifyBGPPeerRouteLimit - Verifies maximum routes and warning limits
+  - name: "VerifyBGPPeerRouteLimit"
+    module: "routing"
+    categories: ["routing", "bgp", "route-limits"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.0.0.1"
+          vrf: "default"
+          maximum_routes: 10000
+          warning_limit: 9000
+        - peer_address: "10.0.0.2"
+          vrf: "default"
+          maximum_routes: 12000
+          warning_limit: 10000
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+          maximum_routes: 5000
+
+  # 17. VerifyBGPPeerGroup - Verifies BGP peer group assignment
+  - name: "VerifyBGPPeerGroup"
+    module: "routing"
+    categories: ["routing", "bgp", "peer-groups"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.1.0.1"
+          vrf: "default"
+          peer_group: "IPv4-UNDERLAY-PEERS"
+        - peer_address: "10.1.0.2"
+          vrf: "default"
+          peer_group: "IPv4-UNDERLAY-PEERS"
+        - peer_address: "192.168.1.1"
+          vrf: "MGMT"
+          peer_group: "MGMT-PEERS"
+        - peer_address: "192.168.100.1"
+          vrf: "default"
+          peer_group: "EVPN-OVERLAY-PEERS"
+
+  # 18. VerifyBGPPeerSessionRibd - Verifies BGP peer session using RIBD
+  - name: "VerifyBGPPeerSessionRibd"
+    module: "routing"
+    categories: ["routing", "bgp", "ribd"]
+    inputs:
+      minimum_established_time: 300
+      check_tcp_queues: true
+      bgp_peers:
+        - peer_address: "10.0.0.1"
+          vrf: "default"
+        - peer_address: "10.0.0.2"
+          vrf: "default"
+        - interface: "Ethernet1"  # RFC5549
+          vrf: "default"
+
+  # 19. VerifyBGPPeersHealthRibd - Verifies BGP peers health using RIBD
+  - name: "VerifyBGPPeersHealthRibd"
+    module: "routing"
+    categories: ["routing", "bgp", "ribd", "health"]
+    inputs:
+      minimum_established_time: 300
+      check_tcp_queues: true
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+        - afi: "evpn"
+
+  # 20. VerifyBGPNlriAcceptance - Verifies BGP NLRI acceptance
+  - name: "VerifyBGPNlriAcceptance"
+    module: "routing"
+    categories: ["routing", "bgp", "nlri"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.100.0.128"
+          vrf: "default"
+          capabilities:
+            - "ipv4Unicast"
+        - peer_address: "10.100.0.129"
+          vrf: "default"
+          capabilities:
+            - "ipv4Unicast"
+            - "ipv6Unicast"
+        - peer_address: "192.168.100.1"
+          vrf: "default"
+          capabilities:
+            - "l2VpnEvpn"
+
+  # 21. VerifyBGPRoutePaths - Verifies BGP route paths
+  - name: "VerifyBGPRoutePaths"
+    module: "routing"
+    categories: ["routing", "bgp", "paths"]
+    inputs:
+      routes:
+        - prefix: "10.0.0.0/24"
+          vrf: "default"
+          expected_paths: 2
+        - prefix: "192.168.0.0/16"
+          vrf: "PROD"
+          expected_paths: 4
+        - prefix: "2001:db8::/32"
+          vrf: "default"
+          expected_paths: 2
+
+  # 22. VerifyBGPRouteECMP - Verifies BGP route ECMP
+  - name: "VerifyBGPRouteECMP"
+    module: "routing"
+    categories: ["routing", "bgp", "ecmp"]
+    inputs:
+      routes:
+        - prefix: "10.0.0.0/24"
+          vrf: "default"
+          ecmp_paths: 4
+        - prefix: "192.168.0.0/16"
+          vrf: "PROD"
+          ecmp_paths: 8
+        - prefix: "2001:db8::/32"
+          vrf: "default"
+          ecmp_paths: 2
+
+  # 23. VerifyBGPRedistribution - Verifies BGP redistribution
+  - name: "VerifyBGPRedistribution"
+    module: "routing"
+    categories: ["routing", "bgp", "redistribution"]
+    inputs:
+      redistribution_sources:
+        - source: "connected"
+          vrf: "default"
+          route_map: "RM-CONNECTED-TO-BGP"
+        - source: "static"
+          vrf: "default"
+          route_map: "RM-STATIC-TO-BGP"
+        - source: "ospf"
+          vrf: "PROD"
+          route_map: "RM-OSPF-TO-BGP"
+          ospf_process: 100
+
+  # 24. VerifyBGPPeerTtlMultiHops - Verifies BGP peer TTL for multi-hop sessions
+  - name: "VerifyBGPPeerTtlMultiHops"
+    module: "routing"
+    categories: ["routing", "bgp", "ttl"]
+    inputs:
+      bgp_peers:
+        - peer_address: "10.0.0.100"
+          vrf: "default"
+          ttl: 255  # eBGP multi-hop
+        - peer_address: "192.168.1.100"
+          vrf: "MGMT"
+          ttl: 2    # eBGP with 2 hops
+        - peer_address: "172.16.0.100"
+          vrf: "PROD"
+          ttl: 1    # Direct eBGP
+
+  # ==================== BGP Unnumbered Tests ====================
   - name: "VerifyBGPUnnumbered"
     module: "routing"
     categories: ["routing", "bgp", "unnumbered"]
     inputs:
       vrf: "default"
       interfaces:
+        # Leaf-to-Spine connections using BGP unnumbered
         - interface: "Et10/1"
           remote_asn: 65103
           expected_state: "Established"
           description: "Connection to spine1"
-        
+
         - interface: "Et9/1"
           remote_asn: 65104
           expected_state: "Established"
           description: "Connection to spine2"
 
+  # ==================== Legacy BGP Peers Test (backward compatibility) ====================
   - name: "VerifyBGPPeers"
     module: "routing"
-    categories: ["routing", "bgp"]
+    categories: ["routing", "bgp", "legacy"]
     inputs:
       peers:
         - peer: "10.0.0.1"
           state: "Established"
           asn: 65001
           vrf: "default"
+        - peer: "10.0.0.2"
+          state: "Established"
+          asn: 65002
+          vrf: "default"
+        - peer: "192.168.1.1"
+          state: "Established"
+          asn: 65100
+          vrf: "MGMT"
