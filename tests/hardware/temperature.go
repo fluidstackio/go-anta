@@ -5,16 +5,36 @@ import (
 	"fmt"
 
 	"github.com/gavmckee/go-anta/internal/device"
+	"github.com/gavmckee/go-anta/internal/platform"
 	"github.com/gavmckee/go-anta/internal/test"
 )
 
+// VerifyTemperature verifies that system temperature sensors are within acceptable ranges.
+//
+// This test performs the following checks:
+//  1. Monitors all temperature sensors on the device.
+//  2. Checks current temperatures against alert and overheat thresholds.
+//  3. Validates system temperature status is "temperatureOk".
+//  4. Applies configurable failure margin to overheat thresholds.
+//
+// Expected Results:
+//   - Success: All temperature sensors are within normal operating ranges.
+//   - Failure: Temperature sensors exceed alert thresholds or approach overheat limits.
+//   - Error: Unable to retrieve temperature sensor data.
+//
+// Example YAML configuration:
+//   - name: "VerifyTemperature"
+//     module: "hardware"
+//     inputs:
+//       check_temp_sensors: true
+//       failure_margin: 5.0  # degrees Celsius margin before overheat
 type VerifyTemperature struct {
 	test.BaseTest
 	CheckTempSensors bool    `yaml:"check_temp_sensors" json:"check_temp_sensors"`
 	FailureMargin    float64 `yaml:"failure_margin,omitempty" json:"failure_margin,omitempty"`
 }
 
-func NewVerifyTemperature(inputs map[string]interface{}) (test.Test, error) {
+func NewVerifyTemperature(inputs map[string]any) (test.Test, error) {
 	t := &VerifyTemperature{
 		BaseTest: test.BaseTest{
 			TestName:        "VerifyTemperature",
@@ -47,6 +67,11 @@ func (t *VerifyTemperature) Execute(ctx context.Context, dev device.Device) (*te
 		Categories: t.Categories(),
 	}
 
+	// Skip on virtual/lab platforms where physical temperature sensors are not present
+	if skipResult := platform.SkipOnVirtualPlatforms(dev, t.Name(), t.Categories(), "physical temperature sensors are not present"); skipResult != nil {
+		return skipResult, nil
+	}
+
 	cmd := device.Command{
 		Template: "show system environment temperature",
 		Format:   "json",
@@ -63,10 +88,10 @@ func (t *VerifyTemperature) Execute(ctx context.Context, dev device.Device) (*te
 	warnings := []string{}
 	alerts := []string{}
 
-	if tempData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if sensors, ok := tempData["tempSensors"].([]interface{}); ok {
+	if tempData, ok := cmdResult.Output.(map[string]any); ok {
+		if sensors, ok := tempData["tempSensors"].([]any); ok {
 			for _, s := range sensors {
-				if sensor, ok := s.(map[string]interface{}); ok {
+				if sensor, ok := s.(map[string]any); ok {
 					sensorName := ""
 					if name, ok := sensor["name"].(string); ok {
 						sensorName = name
@@ -128,9 +153,10 @@ func (t *VerifyTemperature) Execute(ctx context.Context, dev device.Device) (*te
 	return result, nil
 }
 
-func (t *VerifyTemperature) ValidateInput(input interface{}) error {
+func (t *VerifyTemperature) ValidateInput(input any) error {
 	if t.FailureMargin < 0 {
 		return fmt.Errorf("failure margin cannot be negative")
 	}
 	return nil
 }
+

@@ -8,10 +8,10 @@ tests:
     inputs:
       hosts:
         - destination: "8.8.8.8"
-          vrf: "default"
+          vrf: "management"
           reachable: true
         - destination: "1.1.1.1"
-          vrf: "default"
+          vrf: "management"
           reachable: true
       repeat: 2
       size: 100
@@ -21,12 +21,12 @@ tests:
     categories: ["connectivity", "lldp"]
     inputs:
       interfaces:
-        - interface: "Ethernet1"
-          neighbor_device: "spine1"
-          neighbor_port: "Ethernet1"
-        - interface: "Ethernet2"
-          neighbor_device: "spine2"
-          neighbor_port: "Ethernet1"
+        - interface: "Ethernet9/1"
+          neighbor_device: "wdl-200-50-r104-eth-spine-01"
+          neighbor_port: "Ethernet1/1"
+        - interface: "Ethernet10/1"
+          neighbor_device: "wdl-200-50-r103-eth-spine-01"
+          neighbor_port: "Ethernet1/1"
 
   # Hardware Tests
   - name: "VerifyTemperature"
@@ -64,15 +64,63 @@ tests:
           state: "Established"
           asn: 65002
 
-  - name: "VerifyOSPFNeighbors"
+  # BGP IPv6 Tests
+  - name: "VerifyBGPPeerCount"
     module: "routing"
-    categories: ["routing", "ospf"]
+    categories: ["routing", "bgp", "peer-count"]
     inputs:
-      neighbors:
-        - interface: "Ethernet1"
-          state: "Full"
-        - interface: "Ethernet2"
-          state: "Full"
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+          num_peers: 2
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+          num_peers: 2
+
+  - name: "VerifyBGPPeersHealth"
+    module: "routing"
+    categories: ["routing", "bgp", "health"]
+    inputs:
+      address_families:
+        - afi: "ipv4"
+          safi: "unicast"
+          vrf: "default"
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+
+  - name: "VerifyBGPSpecificPeers"
+    module: "routing"
+    categories: ["routing", "bgp", "ipv6"]
+    inputs:
+      address_families:
+        - afi: "ipv6"
+          safi: "unicast"
+          bgp_peers:
+            - peer_address: "2001:db8::1"
+              afi: "ipv6"
+              safi: "unicast"
+              next_hop: "2001:db8::1"
+              rx_prefixes: 10
+              tx_prefixes: 20
+            - peer_address: "2001:db8::2"
+              afi: "ipv6"
+              safi: "unicast"
+              next_hop: "2001:db8::2"
+              rx_prefixes: 15
+              tx_prefixes: 25
+
+  # - name: "VerifyOSPFNeighbors"
+  #   module: "routing"
+  #   categories: ["routing", "ospf"]
+  #   inputs:
+  #     neighbors:
+  #       - interface: "Ethernet1"
+  #         state: "Full"
+  #       - interface: "Ethernet2"
+  #         state: "Full"
 
   - name: "VerifyStaticRoutes"
     module: "routing"
@@ -81,18 +129,16 @@ tests:
       routes:
         - prefix: "0.0.0.0/0"
           next_hop: "192.168.1.1"
-          vrf: "default"
+          vrf: "management"
 
   # System Tests
   - name: "VerifyEOSVersion"
     module: "system"
     categories: ["system", "software"]
     inputs:
-      minimum_version: "4.25.0"
+      minimum_version: "4.34.2.1F"
       versions:
-        - "4.28.0F"
-        - "4.27.3F"
-        - "4.26.5M"
+        - "4.34.2.1F"
 
   - name: "VerifyUptime"
     module: "system"
@@ -105,9 +151,11 @@ tests:
     categories: ["system", "time"]
     inputs:
       servers:
-        - server: "0.pool.ntp.org"
+        - server: "time-a-g.nist.gov"
           synchronized: true
-        - server: "1.pool.ntp.org"
+        - server: "time-b-g.nist.gov"
+          synchronized: true
+        - server: "time.google.com"
           synchronized: true
 
   - name: "VerifyDNSResolution"
@@ -120,3 +168,20 @@ tests:
       fqdn:
         - "www.google.com"
         - "www.arista.com"
+
+  - name: "VerifyBGPUnnumbered"
+    module: "routing"
+    categories: ["routing", "bgp", "unnumbered"]
+    inputs:
+      vrf: "default"
+      interfaces:
+        # Leaf-to-Spine connections using BGP unnumbered
+        - interface: "Et10/1"
+          remote_asn: 65103
+          expected_state: "Established"
+          description: "Connection to spine1"
+        
+        - interface: "Et9/1"
+          remote_asn: 65104
+          expected_state: "Established"
+          description: "Connection to spine2"

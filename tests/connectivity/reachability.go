@@ -3,11 +3,37 @@ package connectivity
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 
 	"github.com/gavmckee/go-anta/internal/device"
 	"github.com/gavmckee/go-anta/internal/test"
 )
 
+// VerifyReachability verifies IP reachability to specified destinations using ping.
+//
+// Expected Results:
+//   - Success: The test will pass if all specified destinations have the expected reachability state.
+//   - Failure: The test will fail if any destination does not match the expected reachability state.
+//   - Error: The test will report an error if ping commands cannot be executed.
+//
+// Examples:
+//   - name: VerifyReachability to external hosts
+//     VerifyReachability:
+//       hosts:
+//         - destination: "8.8.8.8"
+//           vrf: "default"
+//           reachable: true
+//         - destination: "1.1.1.1"
+//           reachable: true
+//       repeat: 3
+//       size: 100
+//
+//   - name: VerifyReachability negative test
+//     VerifyReachability:
+//       hosts:
+//         - destination: "192.0.2.1"  # Should not be reachable
+//           reachable: false
 type VerifyReachability struct {
 	test.BaseTest
 	Hosts  []ReachabilityHost `yaml:"hosts" json:"hosts"`
@@ -21,7 +47,7 @@ type ReachabilityHost struct {
 	Reachable   bool   `yaml:"reachable" json:"reachable"`
 }
 
-func NewVerifyReachability(inputs map[string]interface{}) (test.Test, error) {
+func NewVerifyReachability(inputs map[string]any) (test.Test, error) {
 	t := &VerifyReachability{
 		BaseTest: test.BaseTest{
 			TestName:        "VerifyReachability",
@@ -72,6 +98,7 @@ func (t *VerifyReachability) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
+
 	if len(t.Hosts) == 0 {
 		result.Status = test.TestError
 		result.Message = "No hosts configured for reachability test"
@@ -105,40 +132,29 @@ func (t *VerifyReachability) Execute(ctx context.Context, dev device.Device) (*t
 			continue
 		}
 
+		// Extract message from EOS JSON output - EOS wraps the command result
+		// The actual structure is: result[0].messages[0] contains the ping output text
 		if pingResult, ok := cmdResult.Output.(map[string]interface{}); ok {
-			success := false
-			
 			if messages, ok := pingResult["messages"].([]interface{}); ok && len(messages) > 0 {
-				for _, msg := range messages {
-					if msgStr, ok := msg.(string); ok {
-						if contains(msgStr, "bytes from") || contains(msgStr, "Success rate is") {
-							transmitted := 0
-							received := 0
-							
-							if stats, ok := pingResult["stats"].(map[string]interface{}); ok {
-								if tx, ok := stats["transmitted"].(float64); ok {
-									transmitted = int(tx)
-								}
-								if rx, ok := stats["received"].(float64); ok {
-									received = int(rx)
-								}
-							}
-							
-							if transmitted > 0 && received > 0 {
-								success = true
-							}
-							break
-						}
+				if message, ok := messages[0].(string); ok {
+					if failure := t.isHostReachable(host, message); failure != "" {
+						failures = append(failures, failure)
+					}
+				} else {
+					if host.Reachable {
+						failures = append(failures, fmt.Sprintf("%s: ping message not a string - type: %T",
+							host.Destination, messages[0]))
 					}
 				}
-			}
-
-			if success != host.Reachable {
+			} else {
 				if host.Reachable {
-					failures = append(failures, fmt.Sprintf("%s: expected reachable but was unreachable", host.Destination))
-				} else {
-					failures = append(failures, fmt.Sprintf("%s: expected unreachable but was reachable", host.Destination))
+					failures = append(failures, fmt.Sprintf("%s: no ping messages found in result", host.Destination))
 				}
+			}
+		} else {
+			if host.Reachable {
+				failures = append(failures, fmt.Sprintf("%s: unexpected JSON structure - type: %T",
+					host.Destination, cmdResult.Output))
 			}
 		}
 	}
@@ -151,7 +167,7 @@ func (t *VerifyReachability) Execute(ctx context.Context, dev device.Device) (*t
 	return result, nil
 }
 
-func (t *VerifyReachability) ValidateInput(input interface{}) error {
+func (t *VerifyReachability) ValidateInput(input any) error {
 	if t.Hosts == nil || len(t.Hosts) == 0 {
 		return fmt.Errorf("at least one host must be specified")
 	}
@@ -173,17 +189,38 @@ func (t *VerifyReachability) ValidateInput(input interface{}) error {
 	return nil
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || 
-		   len(s) > len(substr) && containsHelper(s[1:], substr)
-}
+// isHostReachable checks if a host is reachable based on ping message, following Python ANTA pattern
+// Returns empty string if test passes, or failure message if test fails
+func (t *VerifyReachability) isHostReachable(host ReachabilityHost, message string) string {
+	// Extract received packet count using regex, limiting digits to prevent ReDoS
+	// From the actual EOS output: "2 packets transmitted, 2 received, 0% packet loss"
+	pattern := regexp.MustCompile(`(\d{1,20})\s+received`)
+	matches := pattern.FindStringSubmatch(message)
 
-func containsHelper(s, substr string) bool {
-	if len(s) < len(substr) {
-		return false
+	receivedPackets := 0
+	if len(matches) > 1 {
+		if count, err := strconv.Atoi(matches[1]); err == nil {
+			receivedPackets = count
+		}
 	}
-	if s[:len(substr)] == substr {
-		return true
+
+	expectedPackets := t.Repeat
+	if expectedPackets == 0 {
+		expectedPackets = 5 // EOS default
 	}
-	return containsHelper(s[1:], substr)
+
+
+	// Check if host is expected to be reachable
+	if host.Reachable && receivedPackets != expectedPackets {
+		return fmt.Sprintf("%s - Packet loss detected - Transmitted: %d Received: %d",
+			host.Destination, expectedPackets, receivedPackets)
+	}
+
+	// Check if host is expected to be unreachable
+	if !host.Reachable && receivedPackets != 0 {
+		return fmt.Sprintf("%s - Destination is expected to be unreachable but found reachable",
+			host.Destination)
+	}
+
+	return "" // Test passed
 }
