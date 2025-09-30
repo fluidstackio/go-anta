@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/platform"
 	"github.com/gavmckee/go-anta/internal/test"
 )
 
@@ -16,9 +15,9 @@ import (
 // by checking both their connection status and telemetry functionality.
 //
 // The test performs the following checks:
-//   1. Verifies that at least one path is configured in the path-selection configuration.
-//   2. Validates that all path states are in acceptable conditions ('IPsec established' or 'Resolved').
-//   3. Confirms that telemetry state is 'active' for all paths to ensure monitoring is functional.
+//  1. Verifies that at least one path is configured in the path-selection configuration.
+//  2. Validates that all path states are in acceptable conditions ('IPsec established' or 'Resolved').
+//  3. Confirms that telemetry state is 'active' for all paths to ensure monitoring is functional.
 //
 // Expected Results:
 //   - Success: The test will pass if all paths have acceptable states and active telemetry.
@@ -26,12 +25,13 @@ import (
 //   - Error: The test will report an error if path-selection information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyPathsHealth basic check
 //     VerifyPathsHealth: {}
 //
 //   - name: VerifyPathsHealth comprehensive validation
 //     VerifyPathsHealth:
-//       # No parameters needed - validates all configured paths
+//     # No parameters needed - validates all configured paths
 type VerifyPathsHealth struct {
 	test.BaseTest
 }
@@ -55,11 +55,6 @@ func (t *VerifyPathsHealth) Execute(ctx context.Context, dev device.Device) (*te
 		DeviceName: dev.Name(),
 		Status:     test.TestSuccess,
 		Categories: t.Categories(),
-	}
-
-	// Skip on virtual/lab platforms where path-selection may not be supported
-	if skipResult := platform.SkipOnVirtualPlatforms(dev, t.Name(), t.Categories(), "path-selection features may not be supported"); skipResult != nil {
-		return skipResult, nil
 	}
 
 	cmd := device.Command{
@@ -159,10 +154,10 @@ func (t *VerifyPathsHealth) ValidateInput(input any) error {
 // checking the path group, addresses, connection state, and telemetry status.
 //
 // The test performs the following checks:
-//   1. Verifies that the specified peer and path group exist in the configuration.
-//   2. Validates that the source and destination addresses match the expected values.
-//   3. Confirms that the path state is acceptable ('ipsecEstablished' or 'routeResolved').
-//   4. Ensures that telemetry state is 'active' for proper monitoring.
+//  1. Verifies that the specified peer and path group exist in the configuration.
+//  2. Validates that the source and destination addresses match the expected values.
+//  3. Confirms that the path state is acceptable ('ipsecEstablished' or 'routeResolved').
+//  4. Ensures that telemetry state is 'active' for proper monitoring.
 //
 // Expected Results:
 //   - Success: The test will pass if the specific path exists with correct configuration and healthy state.
@@ -170,19 +165,20 @@ func (t *VerifyPathsHealth) ValidateInput(input any) error {
 //   - Error: The test will report an error if path-selection information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifySpecificPath for peer 10.1.1.1
 //     VerifySpecificPath:
-//       peer: "10.1.1.1"
-//       path_group: "internet"
-//       source_address: "10.0.0.1"
-//       destination_address: "10.1.1.1"
+//     peer: "10.1.1.1"
+//     path_group: "internet"
+//     source_address: "10.0.0.1"
+//     destination_address: "10.1.1.1"
 //
 //   - name: VerifySpecificPath for MPLS path
 //     VerifySpecificPath:
-//       peer: "192.168.1.100"
-//       path_group: "mpls-primary"
-//       source_address: "192.168.1.1"
-//       destination_address: "192.168.1.100"
+//     peer: "192.168.1.100"
+//     path_group: "mpls-primary"
+//     source_address: "192.168.1.1"
+//     destination_address: "192.168.1.100"
 type VerifySpecificPath struct {
 	test.BaseTest
 	Peer               string `yaml:"peer" json:"peer"`
@@ -226,16 +222,11 @@ func (t *VerifySpecificPath) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
-	// Skip on virtual/lab platforms where path-selection may not be supported
-	if skipResult := platform.SkipOnVirtualPlatforms(dev, t.Name(), t.Categories(), "path-selection features may not be supported"); skipResult != nil {
-		return skipResult, nil
-	}
-
 	cmd := device.Command{
 		Template: "show path-selection paths",
 		Format:   "json",
 		UseCache: false,
-		Revision: 1, // Using revision 1 as specified in Python implementation
+		Revision: 1,
 	}
 
 	cmdResult, err := dev.Execute(ctx, cmd)
@@ -391,4 +382,3 @@ type PathInfo struct {
 	DestinationAddress string
 	PathGroup          string
 }
-

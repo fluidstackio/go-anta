@@ -10,6 +10,7 @@ import (
 
 	"github.com/gavmckee/go-anta/internal/device"
 	"github.com/gavmckee/go-anta/internal/inventory"
+	"github.com/gavmckee/go-anta/internal/logger"
 	"github.com/gavmckee/go-anta/internal/reporter"
 	"github.com/gavmckee/go-anta/internal/test"
 	"github.com/spf13/cobra"
@@ -33,6 +34,11 @@ var (
 	hide              string
 	outputFile        string
 	format            string
+	logLevel          string
+	verbose           bool
+	quiet             bool
+	progress          bool
+	silent            bool
 )
 
 var NrfuCmd = &cobra.Command{
@@ -62,12 +68,20 @@ func init() {
 	NrfuCmd.Flags().StringVar(&hide, "hide", "", "hide results by status (success, failure, error, skipped)")
 	NrfuCmd.Flags().StringVarP(&outputFile, "output", "o", "", "output file path")
 	NrfuCmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, csv, json, markdown)")
+	NrfuCmd.Flags().StringVar(&logLevel, "log-level", "warn", "log level (trace, debug, info, warn, error, fatal)")
+	NrfuCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output (equivalent to --log-level=debug)")
+	NrfuCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "quiet mode - only show results (equivalent to --log-level=error)")
+	NrfuCmd.Flags().BoolVar(&silent, "silent", false, "silent mode - no logging output during execution, only show final results")
+	NrfuCmd.Flags().BoolVarP(&progress, "progress", "p", true, "show progress bars during test execution")
 
 	_ = NrfuCmd.MarkFlagRequired("catalog")
 }
 
 func runNrfu(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+
+	// Configure logging based on flags IMMEDIATELY before any other operations
+	configureLogging()
 
 	var inv *inventory.Inventory
 	var err error
@@ -145,7 +159,9 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	for _, devConfig := range inv.Devices {
 		dev := device.NewEOSDevice(devConfig)
 		if err := dev.Connect(ctx); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to connect to %s: %v\n", devConfig.Name, err)
+			if !silent {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to connect to %s: %v\n", devConfig.Name, err)
+			}
 			continue
 		}
 		deviceList = append(deviceList, dev)
@@ -156,8 +172,15 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no devices available for testing")
 	}
 
-	runner := test.NewRunner(concurrency)
-	results, err := runner.Run(ctx, catalog.Tests, deviceList)
+	// Use progress runner if progress is enabled, otherwise use standard runner
+	var results []test.TestResult
+	if progress && !quiet && !silent {
+		progressRunner := test.NewProgressRunner(concurrency, true)
+		results, err = progressRunner.Run(ctx, catalog.Tests, deviceList)
+	} else {
+		runner := test.NewRunner(concurrency)
+		results, err = runner.Run(ctx, catalog.Tests, deviceList)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to run tests: %w", err)
 	}
@@ -348,4 +371,23 @@ func loadNetboxInventory(ctx context.Context) (*inventory.Inventory, error) {
 
 	fmt.Printf("Loading devices from Netbox: %s\n", url)
 	return inventory.LoadFromNetbox(config, query, credentials)
+}
+
+// configureLogging sets up logging based on command line flags
+func configureLogging() {
+	// Handle flag precedence: silent > quiet > verbose > log-level
+	if silent {
+		// Silent mode: no output at all during execution
+		logger.SetLevel("fatal")
+	} else if quiet {
+		logger.SetLevel("error")
+	} else if verbose {
+		logger.SetLevel("debug")
+	} else if progress && !verbose {
+		// When progress bars are enabled and not in verbose mode, suppress most logging
+		// to keep the progress display clean
+		logger.SetLevel("error")
+	} else {
+		logger.SetLevel(logLevel)
+	}
 }
