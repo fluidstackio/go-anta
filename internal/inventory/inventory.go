@@ -57,6 +57,9 @@ func LoadInventory(path string) (*Inventory, error) {
 		return nil, fmt.Errorf("failed to parse inventory: %w", err)
 	}
 
+	// Expand environment variables in device credentials
+	inv.expandEnvVars()
+
 	if err := inv.expandNetworks(); err != nil {
 		return nil, fmt.Errorf("failed to expand networks: %w", err)
 	}
@@ -328,4 +331,15 @@ func isHostIP(ip net.IP, ipnet *net.IPNet) bool {
 	}
 
 	return !ip.Equal(ipnet.IP) && !ip.Equal(broadcast)
+}
+
+// expandEnvVars expands environment variables in device configurations
+// Supports ${VAR} and $VAR syntax
+func (i *Inventory) expandEnvVars() {
+	for idx := range i.Devices {
+		i.Devices[idx].Username = os.ExpandEnv(i.Devices[idx].Username)
+		i.Devices[idx].Password = os.ExpandEnv(i.Devices[idx].Password)
+		i.Devices[idx].EnablePassword = os.ExpandEnv(i.Devices[idx].EnablePassword)
+		i.Devices[idx].Host = os.ExpandEnv(i.Devices[idx].Host)
+	}
 }

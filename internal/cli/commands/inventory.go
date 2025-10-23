@@ -9,22 +9,24 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/gavmckee/go-anta/internal/device"
 	"github.com/gavmckee/go-anta/internal/inventory"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	invFile       string
-	invNetboxURL  string
-	invNetboxToken string
-	invNetboxQuery string
-	invTags       string
-	invDevices    string
-	invLimit      string
-	invFormat     string
-	invShowTags   bool
-	invShowExtra  bool
+	invFile           string
+	invNetboxURL      string
+	invNetboxToken    string
+	invNetboxQuery    string
+	invTags           string
+	invDevices        string
+	invLimit          string
+	invFormat         string
+	invShowTags       bool
+	invShowExtra      bool
+	invUseEnvVars     bool
 )
 
 var InventoryCmd = &cobra.Command{
@@ -45,6 +47,7 @@ func init() {
 	InventoryCmd.Flags().StringVarP(&invFormat, "format", "f", "table", "output format (table, json, yaml, count)")
 	InventoryCmd.Flags().BoolVar(&invShowTags, "show-tags", false, "show device tags")
 	InventoryCmd.Flags().BoolVar(&invShowExtra, "show-extra", false, "show extra device metadata")
+	InventoryCmd.Flags().BoolVar(&invUseEnvVars, "use-env-vars", false, "use environment variable placeholders instead of actual credentials in output")
 }
 
 func runInventory(cmd *cobra.Command, args []string) error {
@@ -222,8 +225,31 @@ func outputJSON(inv *inventory.Inventory) error {
 
 func outputYAML(inv *inventory.Inventory) error {
 	// Output in standard GANTA inventory format
+	outputInv := inv
+
+	// Replace credentials with environment variable placeholders if requested
+	if invUseEnvVars {
+		outputInv = &inventory.Inventory{
+			Devices: make([]device.DeviceConfig, len(inv.Devices)),
+		}
+		for i, dev := range inv.Devices {
+			devCopy := dev
+			// Replace with environment variable placeholders
+			if devCopy.Username != "" {
+				devCopy.Username = "${DEVICE_USERNAME}"
+			}
+			if devCopy.Password != "" {
+				devCopy.Password = "${DEVICE_PASSWORD}"
+			}
+			if devCopy.EnablePassword != "" {
+				devCopy.EnablePassword = "${DEVICE_ENABLE_PASSWORD}"
+			}
+			outputInv.Devices[i] = devCopy
+		}
+	}
+
 	encoder := yaml.NewEncoder(os.Stdout)
-	return encoder.Encode(inv)
+	return encoder.Encode(outputInv)
 }
 
 func formatExtra(extra map[string]string) string {
