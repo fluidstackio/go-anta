@@ -11,9 +11,9 @@ var log *logrus.Logger
 
 func init() {
 	log = logrus.New()
-	
+
 	// Set default configuration
-	log.SetOutput(os.Stdout)
+	log.SetOutput(os.Stderr)
 	log.SetLevel(logrus.WarnLevel) // Default to only show warnings and above
 	
 	// Custom formatter for better readability
@@ -62,7 +62,7 @@ func SetVerbose(verbose bool) {
 // SetOutput sets the log output file
 func SetOutput(path string) error {
 	if path == "" {
-		log.SetOutput(os.Stdout)
+		log.SetOutput(os.Stderr)
 		return nil
 	}
 	
