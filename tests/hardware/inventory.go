@@ -32,9 +32,10 @@ import (
 //         - "PWR-460AC-F"
 type VerifyInventory struct {
 	test.BaseTest
-	MinimumMemory   int64 `yaml:"minimum_memory,omitempty" json:"minimum_memory,omitempty"`
-	MinimumFlash    int64 `yaml:"minimum_flash,omitempty" json:"minimum_flash,omitempty"`
-	RequiredModules []string `yaml:"required_modules,omitempty" json:"required_modules,omitempty"`
+	MinimumMemory    int64    `yaml:"minimum_memory,omitempty" json:"minimum_memory,omitempty"`
+	MinimumFlash     int64    `yaml:"minimum_flash,omitempty" json:"minimum_flash,omitempty"`
+	MinimumSupplies  int      `yaml:"minimum_supplies,omitempty" json:"minimum_supplies,omitempty"`
+	RequiredModules  []string `yaml:"required_modules,omitempty" json:"required_modules,omitempty"`
 }
 
 func NewVerifyInventory(inputs map[string]any) (test.Test, error) {
@@ -52,11 +53,17 @@ func NewVerifyInventory(inputs map[string]any) (test.Test, error) {
 		} else if mem, ok := inputs["minimum_memory"].(int); ok {
 			t.MinimumMemory = int64(mem)
 		}
-		
+
 		if flash, ok := inputs["minimum_flash"].(float64); ok {
 			t.MinimumFlash = int64(flash)
 		} else if flash, ok := inputs["minimum_flash"].(int); ok {
 			t.MinimumFlash = int64(flash)
+		}
+
+		if supplies, ok := inputs["minimum_supplies"].(float64); ok {
+			t.MinimumSupplies = int(supplies)
+		} else if supplies, ok := inputs["minimum_supplies"].(int); ok {
+			t.MinimumSupplies = supplies
 		}
 
 		if modules, ok := inputs["required_modules"].([]any); ok {
@@ -121,7 +128,7 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 		}
 	}
 
-	if len(t.RequiredModules) > 0 {
+	if len(t.RequiredModules) > 0 || t.MinimumSupplies > 0 {
 		invCmd := device.Command{
 			Template: "show inventory",
 			Format:   "json",
@@ -133,15 +140,26 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 			if invData, ok := invResult.Output.(map[string]any); ok {
 				if systemInfo, ok := invData["systemInformation"].([]any); ok {
 					modules := make(map[string]bool)
+					powerSupplyCount := 0
+
 					for _, item := range systemInfo {
 						if itemData, ok := item.(map[string]any); ok {
 							if name, ok := itemData["name"].(string); ok {
 								modules[name] = true
+								// Count power supplies
+								if len(name) >= 11 && name[:11] == "PowerSupply" {
+									powerSupplyCount++
+								}
 							}
 							if model, ok := itemData["modelName"].(string); ok {
 								modules[model] = true
 							}
 						}
+					}
+
+					if t.MinimumSupplies > 0 && powerSupplyCount < t.MinimumSupplies {
+						issues = append(issues, fmt.Sprintf("Insufficient power supplies: %d < %d required",
+							powerSupplyCount, t.MinimumSupplies))
 					}
 
 					for _, required := range t.RequiredModules {
@@ -168,6 +186,9 @@ func (t *VerifyInventory) ValidateInput(input any) error {
 	}
 	if t.MinimumFlash < 0 {
 		return fmt.Errorf("minimum flash cannot be negative")
+	}
+	if t.MinimumSupplies < 0 {
+		return fmt.Errorf("minimum supplies cannot be negative")
 	}
 	return nil
 }
