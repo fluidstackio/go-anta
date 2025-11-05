@@ -136,10 +136,13 @@ func (t *VerifyAdverseDrops) checkInterfaceDrops(intfName string, intfData map[s
 	dropFields := []string{"drops", "inDrops", "outDrops", "totalDrops"}
 
 	for _, field := range dropFields {
-		if drops, ok := intfData[field].(float64); ok {
-			if int64(drops) > t.MaxDrops {
-				*issues = append(*issues, fmt.Sprintf("Interface %s: %s=%d exceeds threshold %d", intfName, field, int64(drops), t.MaxDrops))
-			}
+		drops, ok := intfData[field].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(drops) > t.MaxDrops {
+			*issues = append(*issues, fmt.Sprintf("Interface %s: %s=%d exceeds threshold %d", intfName, field, int64(drops), t.MaxDrops))
 		}
 	}
 }
@@ -148,10 +151,13 @@ func (t *VerifyAdverseDrops) checkForwardingEngineDrops(feName string, feData ma
 	dropFields := []string{"drops", "adverseDrops", "totalDrops"}
 
 	for _, field := range dropFields {
-		if drops, ok := feData[field].(float64); ok {
-			if int64(drops) > t.MaxDrops {
-				*issues = append(*issues, fmt.Sprintf("Forwarding Engine %s: %s=%d exceeds threshold %d", feName, field, int64(drops), t.MaxDrops))
-			}
+		drops, ok := feData[field].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(drops) > t.MaxDrops {
+			*issues = append(*issues, fmt.Sprintf("Forwarding Engine %s: %s=%d exceeds threshold %d", feName, field, int64(drops), t.MaxDrops))
 		}
 	}
 }
@@ -405,26 +411,25 @@ func (t *VerifyPCIeErrors) Execute(ctx context.Context, dev device.Device) (*tes
 
 func (t *VerifyPCIeErrors) checkPCIeDeviceErrors(deviceName string, deviceData map[string]any, issues *[]string) {
 	// Check correctable errors
-	if correctableErrors, ok := deviceData["correctableErrors"].(float64); ok {
-		if int64(correctableErrors) > t.MaxCorrectableErrors {
-			*issues = append(*issues, fmt.Sprintf("Device %s: %d correctable errors exceed threshold %d", deviceName, int64(correctableErrors), t.MaxCorrectableErrors))
-		}
+	if correctableErrors, ok := deviceData["correctableErrors"].(float64); ok && int64(correctableErrors) > t.MaxCorrectableErrors {
+		*issues = append(*issues, fmt.Sprintf("Device %s: %d correctable errors exceed threshold %d", deviceName, int64(correctableErrors), t.MaxCorrectableErrors))
 	}
 
 	// Check uncorrectable errors
-	if uncorrectableErrors, ok := deviceData["uncorrectableErrors"].(float64); ok {
-		if int64(uncorrectableErrors) > t.MaxUncorrectableErrors {
-			*issues = append(*issues, fmt.Sprintf("Device %s: %d uncorrectable errors exceed threshold %d", deviceName, int64(uncorrectableErrors), t.MaxUncorrectableErrors))
-		}
+	if uncorrectableErrors, ok := deviceData["uncorrectableErrors"].(float64); ok && int64(uncorrectableErrors) > t.MaxUncorrectableErrors {
+		*issues = append(*issues, fmt.Sprintf("Device %s: %d uncorrectable errors exceed threshold %d", deviceName, int64(uncorrectableErrors), t.MaxUncorrectableErrors))
 	}
 
 	// Check for other error types
 	errorFields := []string{"fatalErrors", "nonFatalErrors", "linkErrors"}
 	for _, field := range errorFields {
-		if errors, ok := deviceData[field].(float64); ok {
-			if int64(errors) > 0 {
-				*issues = append(*issues, fmt.Sprintf("Device %s: %d %s detected", deviceName, int64(errors), field))
-			}
+		errors, ok := deviceData[field].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(errors) > 0 {
+			*issues = append(*issues, fmt.Sprintf("Device %s: %d %s detected", deviceName, int64(errors), field))
 		}
 	}
 }

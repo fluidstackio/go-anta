@@ -82,43 +82,50 @@ func (t *VerifyVxlanVtep) Execute(ctx context.Context, dev device.Device) (*test
 	issues := []string{}
 	deviceVteps := make(map[string]bool)
 
-	if vtepData, ok := cmdResult.Output.(map[string]any); ok {
-		// Parse VTEP peers
-		if vteps, ok := vtepData["vteps"].([]any); ok {
-			for _, vtepInfo := range vteps {
-				if vtep, ok := vtepInfo.(map[string]any); ok {
-					if address, ok := vtep["address"].(string); ok {
-						deviceVteps[address] = true
-					} else if vtepAddr, ok := vtep["vtep"].(string); ok {
-						deviceVteps[vtepAddr] = true
-					}
-				}
+	vtepData, ok := cmdResult.Output.(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Failed to parse VXLAN VTEP output"
+		return result, nil
+	}
+
+	// Parse VTEP peers
+	if vteps, ok := vtepData["vteps"].([]any); ok {
+		for _, vtepInfo := range vteps {
+			vtep, ok := vtepInfo.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if address, ok := vtep["address"].(string); ok {
+				deviceVteps[address] = true
+			} else if vtepAddr, ok := vtep["vtep"].(string); ok {
+				deviceVteps[vtepAddr] = true
 			}
 		}
+	}
 
-		// Alternative structure - check remote VTEPs
-		if remoteVteps, ok := vtepData["remoteVteps"].(map[string]any); ok {
-			for vtepAddr, vtepInfo := range remoteVteps {
-				if vtepData, ok := vtepInfo.(map[string]any); ok {
-					// Check if VTEP is active/operational
-					if status, ok := vtepData["status"].(string); ok {
-						if status == "up" || status == "active" || status == "operational" {
-							deviceVteps[vtepAddr] = true
-						}
-					} else {
-						// If no status field, assume it's present and active
-						deviceVteps[vtepAddr] = true
-					}
-				}
+	// Alternative structure - check remote VTEPs
+	if remoteVteps, ok := vtepData["remoteVteps"].(map[string]any); ok {
+		for vtepAddr, vtepInfo := range remoteVteps {
+			vtepDetails, ok := vtepInfo.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			// Check if VTEP is active/operational
+			status, hasStatus := vtepDetails["status"].(string)
+			if !hasStatus || status == "up" || status == "active" || status == "operational" {
+				deviceVteps[vtepAddr] = true
 			}
 		}
+	}
 
-		// Check for VTEP list in different format
-		if vtepList, ok := vtepData["vtepList"].([]any); ok {
-			for _, vtepAddr := range vtepList {
-				if addr, ok := vtepAddr.(string); ok {
-					deviceVteps[addr] = true
-				}
+	// Check for VTEP list in different format
+	if vtepList, ok := vtepData["vtepList"].([]any); ok {
+		for _, vtepAddr := range vtepList {
+			if addr, ok := vtepAddr.(string); ok {
+				deviceVteps[addr] = true
 			}
 		}
 	}
