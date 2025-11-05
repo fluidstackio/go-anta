@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyStaticRoutes verifies that static routes are configured and active in the routing table.

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gavmckee/go-anta/internal/device"
+	"github.com/gavmckee/go-anta/pkg/device"
 	"github.com/gavmckee/go-anta/internal/logger"
 	"gopkg.in/yaml.v3"
 )

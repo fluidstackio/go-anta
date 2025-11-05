@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/test"
 	"github.com/gavmckee/go-anta/tests/connectivity"
 	"github.com/gavmckee/go-anta/tests/evpn"
 	"github.com/gavmckee/go-anta/tests/hardware"

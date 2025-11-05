@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyVxlan1Interface verifies the operational status of the Vxlan1 interface.
