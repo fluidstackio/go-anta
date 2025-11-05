@@ -55,7 +55,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	} else {
 		return fmt.Errorf("either --inventory or --netbox-url must be specified")
 	}
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to load inventory: %w", err)
 	}
@@ -75,32 +75,32 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Checking %d devices...\n\n", len(inv.Devices))
-	
+
 	// If no-connect flag is set, just display the inventory
 	if checkNoConnect {
 		fmt.Print("Inventory (without connection test):\n\n")
 		for i, devConfig := range inv.Devices {
-			fmt.Printf("%d. %s (%s:%d) - Tags: %s\n", 
-				i+1, devConfig.Name, devConfig.Host, devConfig.Port, 
+			fmt.Printf("%d. %s (%s:%d) - Tags: %s\n",
+				i+1, devConfig.Name, devConfig.Host, devConfig.Port,
 				strings.Join(devConfig.Tags, ", "))
 		}
 		return nil
 	}
-	
+
 	successCount := 0
 	failCount := 0
 
 	for _, devConfig := range inv.Devices {
 		dev := device.NewEOSDevice(devConfig)
-		
+
 		fmt.Printf("Checking %s (%s)... ", devConfig.Name, devConfig.Host)
-		
+
 		if err := dev.Connect(ctx); err != nil {
 			fmt.Printf("❌ Failed: %v\n", err)
 			failCount++
 			continue
 		}
-		
+
 		if dev.IsEstablished() {
 			model := dev.HardwareModel()
 			if model != "" {
@@ -113,12 +113,12 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			fmt.Printf("⚠️  Connected but not established\n")
 			failCount++
 		}
-		
+
 		dev.Disconnect()
 	}
 
 	fmt.Printf("\nSummary: %d successful, %d failed\n", successCount, failCount)
-	
+
 	if failCount > 0 {
 		return fmt.Errorf("%d devices failed connectivity check", failCount)
 	}
@@ -194,10 +194,10 @@ func loadCheckNetboxInventory(ctx context.Context) (*inventory.Inventory, error)
 		username = os.Getenv("DEVICE_USERNAME")
 	}
 	if username == "" {
-		username = "admin"  // Default username
+		username = "admin" // Default username
 	}
 	credentials["username"] = username
-	
+
 	password := checkDevicePassword
 	if password == "" {
 		password = os.Getenv("DEVICE_PASSWORD")
@@ -219,3 +219,4 @@ func loadCheckNetboxInventory(ctx context.Context) (*inventory.Inventory, error)
 	fmt.Fprintf(os.Stderr, "Loading devices from Netbox: %s\n", url)
 	return inventory.LoadFromNetbox(config, query, credentials)
 }
+
