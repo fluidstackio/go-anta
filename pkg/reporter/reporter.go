@@ -3,7 +3,7 @@ package reporter
 import (
 	"io"
 
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 type Reporter interface {

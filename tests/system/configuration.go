@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyZeroTouch verifies that ZeroTouch is disabled on the device.

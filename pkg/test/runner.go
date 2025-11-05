@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gavmckee/go-anta/internal/device"
+	"github.com/gavmckee/go-anta/pkg/device"
 	"github.com/gavmckee/go-anta/internal/logger"
 )
 

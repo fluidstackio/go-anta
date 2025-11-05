@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VirtualPlatforms defines the list of virtual/lab platforms that should skip hardware tests

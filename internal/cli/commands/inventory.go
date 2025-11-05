@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/gavmckee/go-anta/internal/inventory"
+	"github.com/gavmckee/go-anta/pkg/inventory"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

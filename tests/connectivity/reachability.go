@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyReachability verifies IP reachability to specified destinations using ping.

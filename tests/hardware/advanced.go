@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/platform"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/platform"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyAdverseDrops verifies there are no adverse drops exceeding defined thresholds.

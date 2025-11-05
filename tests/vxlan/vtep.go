@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyVxlanVtep verifies the presence of expected VXLAN Tunnel Endpoints (VTEPs).

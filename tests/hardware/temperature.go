@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gavmckee/go-anta/internal/device"
-	"github.com/gavmckee/go-anta/internal/platform"
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/gavmckee/go-anta/pkg/platform"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 // VerifyTemperature verifies that system temperature sensors are within acceptable ranges.

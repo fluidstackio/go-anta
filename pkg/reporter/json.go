@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/gavmckee/go-anta/internal/test"
+	"github.com/gavmckee/go-anta/pkg/test"
 )
 
 type JSONReporter struct {
