@@ -52,7 +52,7 @@ temp/
 debug
 
 # Binary
-go-anta
+/go-anta
 
 # Goreleaser
 .goreleaser.yml
