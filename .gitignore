@@ -18,6 +18,7 @@ vendor/
 # Build directories
 bin/
 dist/
+.cache/
 
 # IDE specific files
 .idea/

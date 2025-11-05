@@ -86,11 +86,12 @@ tests:
 ### Option 2: Netbox Dynamic Inventory
 
 ```bash
-# Set environment variables
+# Set environment variables in .env
+touch .env
 export NETBOX_URL=https://netbox.example.com
-export NETBOX_TOKEN=$TOKEN
-export DEVICE_USERNAME=admin
-export DEVICE_PASSWORD=admin123
+export NETBOX_TOKEN={token}
+export DEVICE_USERNAME={username}
+export DEVICE_PASSWORD={password}
 
 # Run tests directly from Netbox
 ./bin/go-anta nrfu \
@@ -110,9 +111,9 @@ Before running tests, preview your inventory to ensure the correct devices are t
 
 # Show inventory from Netbox
 ./bin/go-anta inventory \
-  --netbox-url https://netbox.example.com \
-  --netbox-token $TOKEN \
-  --netbox-query "site=dc1"
+  --netbox-url $NETBOX_URL \
+  --netbox-token $NETBOX_TOKEN \
+  --netbox-query "site=wdl"
 
 # Show inventory with additional metadata
 ./bin/go-anta inventory -i inventory.yaml --show-tags --show-extra
@@ -128,15 +129,15 @@ Before running tests, preview your inventory to ensure the correct devices are t
 ```bash
 # Verify Netbox query returns expected devices
 ./bin/go-anta inventory \
-  --netbox-url https://netbox.fluidstack.io \
-  --netbox-token $TOKEN  \
+  --netbox-url $NETBOX_URL \
+  --netbox-token $NETBOX_TOKEN \
   --netbox-query "site_id=14&manufacturer_id=35&platform_id=5" \
   --show-tags
 
 # Export Netbox devices to static inventory file
 ./bin/go-anta inventory \
-  --netbox-url https://netbox.example.com \
-  --netbox-token $TOKEN \
+  --netbox-url $NETBOX_URL \
+  --netbox-token $NETBOX_TOKEN \
   --netbox-query "site=dc1&status=active" \
   -f yaml > netbox-devices.yaml
 ```
@@ -156,8 +157,8 @@ Verify devices are reachable before running tests:
 
 # Check devices from Netbox
 ./bin/go-anta check \
-  --netbox-url https://netbox.example.com \
-  --netbox-token $TOKEN \
+  --netbox-url $NETBOX_URL \
+  --netbox-token $NETBOX_TOKEN \
   --netbox-query "site=dc1"
 
 # Override credentials
@@ -291,14 +292,14 @@ Use slug-based filtering:
 ```bash
 # Test all leaf switches in a specific datacenter
 ./bin/go-anta nrfu \
-  --netbox-url https://netbox.fluidstack.io \
+  --netbox-url $NETBOX_URL \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "site_id=14&role=leaf&status=active" \
   -C catalog.yaml
 
 # Test all Arista devices in production
 ./bin/go-anta nrfu \
-  --netbox-url https://netbox.fluidstack.io \
+  --netbox-url $NETBOX_URL \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "manufacturer=arista,tag=production" \
   -C catalog.yaml \
@@ -306,7 +307,7 @@ Use slug-based filtering:
 
 # Dry-run with device preview
 ./bin/go-anta nrfu \
-  --netbox-url https://netbox.fluidstack.io \
+  --netbox-url $NETBOX_URL \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "site_id=14&manufacturer_id=35&platform_id=5" \
   -C catalog.yaml \
@@ -314,7 +315,7 @@ Use slug-based filtering:
 
 # Test specific tenant's devices
 ./bin/go-anta nrfu \
-  --netbox-url https://netbox.fluidstack.io \
+  --netbox-url $NETBOX_URL \
   --netbox-token $NETBOX_TOKEN \
   --netbox-query "tenant=customer1,status=active" \
   -C catalog.yaml \

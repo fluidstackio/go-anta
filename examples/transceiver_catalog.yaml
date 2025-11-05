@@ -1,0 +1,53 @@
+# Comprehensive BGP Test Catalog - Matching ANTA Python Implementation
+# Based on https://github.com/aristanetworks/anta/blob/main/anta/tests/routing/bgp.py
+
+tests:
+  # ==================== System Tests ====================
+  - name: "VerifyEOSVersion"
+    module: "system"
+    categories: ["system", "version"]
+    inputs:
+      minimum_version: "4.25.0"
+
+  - name: "VerifyUptime"
+    module: "system"
+    categories: ["health"]
+    inputs:
+      minimum_uptime: 3600  # 1 hour
+
+  # Connectivity Tests  
+  - name: "VerifyReachability"
+    module: "connectivity"
+    categories: ["basic"]
+    inputs:
+      hosts:
+        - destination: "8.8.8.8"
+          vrf: "default"
+          reachable: true
+      repeat: 2
+
+  # ==================== Core BGP Tests ====================
+
+  - name: "VerifyNTP"
+    module: "system"
+    categories: ["time"]
+    inputs:
+      servers:
+        - server: "0.pool.ntp.org"
+          synchronized: true
+
+  # Hardware Tests
+  - name: "VerifyTemperature"
+    module: "hardware"
+    categories: ["environmental"]
+    inputs:
+      check_temp_sensors: true
+      failure_margin: 5
+
+  - name: "VerifyTransceivers"
+    module: "hardware"
+    categories: ["optics"]
+    inputs:
+      check_manufacturer: true
+      check_temperature: true
+
