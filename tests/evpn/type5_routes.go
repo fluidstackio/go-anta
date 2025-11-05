@@ -214,70 +214,56 @@ func (t *VerifyEVPNType5Routes) Execute(ctx context.Context, dev device.Device) 
 	issues := []string{}
 	deviceRoutes := make(map[string][]DeviceEVPNRoute)
 
-	if evpnData, ok := cmdResult.Output.(map[string]any); ok {
-		if vrfRoutes, ok := evpnData["vrf"].(map[string]any); ok {
-			for vrfName, vrfData := range vrfRoutes {
-				if vrf, ok := vrfData.(map[string]any); ok {
-					if bgpRouteEntries, ok := vrf["bgpRouteEntries"].(map[string]any); ok {
-						for prefix, routeData := range bgpRouteEntries {
-							if route, ok := routeData.(map[string]any); ok {
-								deviceRoute := DeviceEVPNRoute{
-									Prefix: prefix,
-									VRF:    vrfName,
-								}
+	evpnData, ok := cmdResult.Output.(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Failed to parse EVPN output"
+		return result, nil
+	}
 
-								// Parse VNI
-								if vni, ok := route["vni"].(float64); ok {
-									deviceRoute.VNI = int(vni)
-								}
+	vrfRoutes, ok := evpnData["vrf"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "No VRF data found in EVPN output"
+		return result, nil
+	}
 
-								// Parse Route Distinguisher
-								if rd, ok := route["routeDistinguisher"].(string); ok {
-									deviceRoute.RD = rd
-								}
+	for vrfName, vrfData := range vrfRoutes {
+		vrf, ok := vrfData.(map[string]any)
+		if !ok {
+			continue
+		}
 
-								// Parse paths
-								if bgpRoutePaths, ok := route["bgpRoutePaths"].([]any); ok {
-									for _, pathData := range bgpRoutePaths {
-										if path, ok := pathData.(map[string]any); ok {
-											routePath := EVPNRoutePath{}
+		bgpRouteEntries, ok := vrf["bgpRouteEntries"].(map[string]any)
+		if !ok {
+			continue
+		}
 
-											if valid, ok := path["valid"].(bool); ok {
-												routePath.Valid = valid
-											}
-											if active, ok := path["active"].(bool); ok {
-												routePath.Active = active
-											}
-											if nexthop, ok := path["nexthop"].(string); ok {
-												routePath.NextHop = nexthop
-											}
-
-											// Parse route targets
-											if routeDetail, ok := path["routeDetail"].(map[string]any); ok {
-												if extCommunityList, ok := routeDetail["extCommunityList"].([]any); ok {
-													for _, extComm := range extCommunityList {
-														if comm, ok := extComm.(map[string]any); ok {
-															if commType, ok := comm["type"].(string); ok && commType == "routeTarget" {
-																if value, ok := comm["value"].(string); ok {
-																	routePath.RouteTargets = append(routePath.RouteTargets, value)
-																}
-															}
-														}
-													}
-												}
-											}
-
-											deviceRoute.Paths = append(deviceRoute.Paths, routePath)
-										}
-									}
-								}
-
-								deviceRoutes[prefix] = append(deviceRoutes[prefix], deviceRoute)
-							}
-						}
-					}
-				}
+		for prefix, routeData := range bgpRouteEntries {
+			route, ok := routeData.(map[string]any)
+			if !ok {
+				continue
 			}
+
+			deviceRoute := DeviceEVPNRoute{
+				Prefix: prefix,
+				VRF:    vrfName,
+			}
+
+			// Parse VNI
+			if vni, ok := route["vni"].(float64); ok {
+				deviceRoute.VNI = int(vni)
+			}
+
+			// Parse Route Distinguisher
+			if rd, ok := route["routeDistinguisher"].(string); ok {
+				deviceRoute.RD = rd
+			}
+
+			// Parse paths
+			deviceRoute.Paths = parseBGPRoutePaths(route)
+
+			deviceRoutes[prefix] = append(deviceRoutes[prefix], deviceRoute)
 		}
 	}
 
@@ -392,6 +378,73 @@ func (t *VerifyEVPNType5Routes) Execute(ctx context.Context, dev device.Device) 
 	}
 
 	return result, nil
+}
+
+// parseBGPRoutePaths extracts BGP paths from a route data structure
+func parseBGPRoutePaths(route map[string]any) []EVPNRoutePath {
+	var paths []EVPNRoutePath
+
+	bgpRoutePaths, ok := route["bgpRoutePaths"].([]any)
+	if !ok {
+		return paths
+	}
+
+	for _, pathData := range bgpRoutePaths {
+		path, ok := pathData.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		routePath := EVPNRoutePath{}
+
+		if valid, ok := path["valid"].(bool); ok {
+			routePath.Valid = valid
+		}
+		if active, ok := path["active"].(bool); ok {
+			routePath.Active = active
+		}
+		if nexthop, ok := path["nexthop"].(string); ok {
+			routePath.NextHop = nexthop
+		}
+
+		routePath.RouteTargets = parseRouteTargets(path)
+		paths = append(paths, routePath)
+	}
+
+	return paths
+}
+
+// parseRouteTargets extracts route targets from path extended communities
+func parseRouteTargets(path map[string]any) []string {
+	var routeTargets []string
+
+	routeDetail, ok := path["routeDetail"].(map[string]any)
+	if !ok {
+		return routeTargets
+	}
+
+	extCommunityList, ok := routeDetail["extCommunityList"].([]any)
+	if !ok {
+		return routeTargets
+	}
+
+	for _, extComm := range extCommunityList {
+		comm, ok := extComm.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		commType, ok := comm["type"].(string)
+		if !ok || commType != "routeTarget" {
+			continue
+		}
+
+		if value, ok := comm["value"].(string); ok {
+			routeTargets = append(routeTargets, value)
+		}
+	}
+
+	return routeTargets
 }
 
 func (t *VerifyEVPNType5Routes) ValidateInput(input any) error {

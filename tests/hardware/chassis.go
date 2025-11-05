@@ -136,112 +136,142 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 
 func (t *VerifyChassisHealth) checkCoolingHealth(coolingData map[string]any, issues *[]string) {
 	// Check overall cooling status
-	if systemStatus, ok := coolingData["systemStatus"].(string); ok {
-		if !strings.EqualFold(systemStatus, "coolingOk") {
-			*issues = append(*issues, fmt.Sprintf("Cooling system status: %s", systemStatus))
-		}
+	if systemStatus, ok := coolingData["systemStatus"].(string); ok && !strings.EqualFold(systemStatus, "coolingOk") {
+		*issues = append(*issues, fmt.Sprintf("Cooling system status: %s", systemStatus))
 	}
 
 	// Check individual fan trays
-	if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
+	fanTrays, ok := coolingData["fanTraySlots"].(map[string]any)
+	if ok {
 		for fanTrayName, fanTrayData := range fanTrays {
-			if fanTray, ok := fanTrayData.(map[string]any); ok {
-				if status, ok := fanTray["status"].(string); ok {
-					if !strings.EqualFold(status, "ok") {
-						*issues = append(*issues, fmt.Sprintf("Fan tray %s: %s", fanTrayName, status))
-					}
-				}
+			fanTray, ok := fanTrayData.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if status, ok := fanTray["status"].(string); ok && !strings.EqualFold(status, "ok") {
+				*issues = append(*issues, fmt.Sprintf("Fan tray %s: %s", fanTrayName, status))
 			}
 		}
 	}
 
 	// Check if requested for additional subsystem checks
-	if t.CheckAllSubsystems {
-		if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
-			for psName, psData := range powerSupplies {
-				if ps, ok := psData.(map[string]any); ok {
-					if fanStatus, ok := ps["fanStatus"].(string); ok {
-						if !strings.EqualFold(fanStatus, "ok") {
-							*issues = append(*issues, fmt.Sprintf("Power supply %s fan: %s", psName, fanStatus))
-						}
-					}
-				}
-			}
+	if !t.CheckAllSubsystems {
+		return
+	}
+
+	powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for psName, psData := range powerSupplies {
+		ps, ok := psData.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if fanStatus, ok := ps["fanStatus"].(string); ok && !strings.EqualFold(fanStatus, "ok") {
+			*issues = append(*issues, fmt.Sprintf("Power supply %s fan: %s", psName, fanStatus))
 		}
 	}
 }
 
 func (t *VerifyChassisHealth) checkPowerHealth(powerData map[string]any, issues *[]string) {
 	// Check overall power status
-	if systemStatus, ok := powerData["systemStatus"].(string); ok {
-		if !strings.EqualFold(systemStatus, "powerOk") {
-			*issues = append(*issues, fmt.Sprintf("Power system status: %s", systemStatus))
-		}
+	if systemStatus, ok := powerData["systemStatus"].(string); ok && !strings.EqualFold(systemStatus, "powerOk") {
+		*issues = append(*issues, fmt.Sprintf("Power system status: %s", systemStatus))
 	}
 
 	// Check individual power supplies
-	if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
-		for psName, psData := range powerSupplies {
-			if ps, ok := psData.(map[string]any); ok {
-				if state, ok := ps["state"].(string); ok {
-					if !strings.EqualFold(state, "ok") && !strings.EqualFold(state, "powerGood") {
-						*issues = append(*issues, fmt.Sprintf("Power supply %s: %s", psName, state))
-					}
-				}
-			}
+	powerSupplies, ok := powerData["powerSupplies"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for psName, psData := range powerSupplies {
+		ps, ok := psData.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		state, ok := ps["state"].(string)
+		if !ok {
+			continue
+		}
+
+		if !strings.EqualFold(state, "ok") && !strings.EqualFold(state, "powerGood") {
+			*issues = append(*issues, fmt.Sprintf("Power supply %s: %s", psName, state))
 		}
 	}
 }
 
 func (t *VerifyChassisHealth) checkTemperatureHealth(tempData map[string]any, issues *[]string) {
 	// Check overall system status
-	if systemStatus, ok := tempData["systemStatus"].(string); ok {
-		if !strings.EqualFold(systemStatus, "temperatureOk") {
-			*issues = append(*issues, fmt.Sprintf("Temperature system status: %s", systemStatus))
-		}
+	if systemStatus, ok := tempData["systemStatus"].(string); ok && !strings.EqualFold(systemStatus, "temperatureOk") {
+		*issues = append(*issues, fmt.Sprintf("Temperature system status: %s", systemStatus))
 	}
 
 	// Check temperature sensors
-	if cardSlots, ok := tempData["cardSlots"].(map[string]any); ok {
+	cardSlots, ok := tempData["cardSlots"].(map[string]any)
+	if ok {
 		for cardName, cardData := range cardSlots {
-			if card, ok := cardData.(map[string]any); ok {
-				if tempSensors, ok := card["tempSensors"].(map[string]any); ok {
-					for sensorName, sensorData := range tempSensors {
-						if sensor, ok := sensorData.(map[string]any); ok {
-							if hwStatus, ok := sensor["hwStatus"].(string); ok {
-								if !strings.EqualFold(hwStatus, "ok") {
-									*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %s", cardName, sensorName, hwStatus))
-								}
-							}
-							if alertCount, ok := sensor["alertCount"].(float64); ok {
-								if alertCount > 0 {
-									*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %d alerts", cardName, sensorName, int(alertCount)))
-								}
-							}
-						}
-					}
+			card, ok := cardData.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			tempSensors, ok := card["tempSensors"].(map[string]any)
+			if !ok {
+				continue
+			}
+
+			for sensorName, sensorData := range tempSensors {
+				sensor, ok := sensorData.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				if hwStatus, ok := sensor["hwStatus"].(string); ok && !strings.EqualFold(hwStatus, "ok") {
+					*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %s", cardName, sensorName, hwStatus))
+				}
+
+				if alertCount, ok := sensor["alertCount"].(float64); ok && alertCount > 0 {
+					*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %d alerts", cardName, sensorName, int(alertCount)))
 				}
 			}
 		}
 	}
 
 	// Check power supply temperature sensors if CheckAllSubsystems is enabled
-	if t.CheckAllSubsystems {
-		if powerSupplies, ok := tempData["powerSupplySlots"].(map[string]any); ok {
-			for psName, psData := range powerSupplies {
-				if ps, ok := psData.(map[string]any); ok {
-					if tempSensors, ok := ps["tempSensors"].(map[string]any); ok {
-						for sensorName, sensorData := range tempSensors {
-							if sensor, ok := sensorData.(map[string]any); ok {
-								if hwStatus, ok := sensor["hwStatus"].(string); ok {
-									if !strings.EqualFold(hwStatus, "ok") {
-										*issues = append(*issues, fmt.Sprintf("Power supply %s temp sensor %s: %s", psName, sensorName, hwStatus))
-									}
-								}
-							}
-						}
-					}
-				}
+	if !t.CheckAllSubsystems {
+		return
+	}
+
+	powerSupplies, ok := tempData["powerSupplySlots"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for psName, psData := range powerSupplies {
+		ps, ok := psData.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		tempSensors, ok := ps["tempSensors"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		for sensorName, sensorData := range tempSensors {
+			sensor, ok := sensorData.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if hwStatus, ok := sensor["hwStatus"].(string); ok && !strings.EqualFold(hwStatus, "ok") {
+				*issues = append(*issues, fmt.Sprintf("Power supply %s temp sensor %s: %s", psName, sensorName, hwStatus))
 			}
 		}
 	}

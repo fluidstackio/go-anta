@@ -194,28 +194,32 @@ func (t *VerifyMlagInterfaces) Execute(ctx context.Context, dev device.Device) (
 		return result, nil
 	}
 
-	var mlagState string
-	var interfaces map[string]MlagInterfaceInfo
+	data, ok := cmdResult.Output.(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Failed to parse MLAG output"
+		return result, nil
+	}
 
-	if data, ok := cmdResult.Output.(map[string]any); ok {
-		if state, ok := data["state"].(string); ok {
-			mlagState = state
-		}
+	mlagState, _ := data["state"].(string)
 
-		if intfs, ok := data["interfaces"].(map[string]any); ok {
-			interfaces = make(map[string]MlagInterfaceInfo)
-			for intfName, intfData := range intfs {
-				if intfInfo, ok := intfData.(map[string]any); ok {
-					info := MlagInterfaceInfo{Name: intfName}
-					if status, ok := intfInfo["status"].(string); ok {
-						info.Status = status
-					}
-					if state, ok := intfInfo["state"].(string); ok {
-						info.State = state
-					}
-					interfaces[intfName] = info
-				}
+	interfaces := make(map[string]MlagInterfaceInfo)
+	intfs, ok := data["interfaces"].(map[string]any)
+	if ok {
+		for intfName, intfData := range intfs {
+			intfInfo, ok := intfData.(map[string]any)
+			if !ok {
+				continue
 			}
+
+			info := MlagInterfaceInfo{Name: intfName}
+			if status, ok := intfInfo["status"].(string); ok {
+				info.Status = status
+			}
+			if state, ok := intfInfo["state"].(string); ok {
+				info.State = state
+			}
+			interfaces[intfName] = info
 		}
 	}
 
@@ -342,36 +346,50 @@ func (t *VerifyMlagConfigSanity) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	data, ok := sanityResult.Output.(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Failed to parse MLAG config-sanity output"
+		return result, nil
+	}
+
 	failures := []string{}
-	if data, ok := sanityResult.Output.(map[string]any); ok {
-		// Check global config sanity
-		if globalSanity, ok := data["globalSanity"].(map[string]any); ok {
-			for configKey, configStatus := range globalSanity {
-				if statusMap, ok := configStatus.(map[string]any); ok {
-					if consistent, ok := statusMap["consistent"].(bool); ok && !consistent {
-						failures = append(failures, fmt.Sprintf("Global config inconsistency: %s", configKey))
-					}
-				}
+
+	// Check global config sanity
+	globalSanity, ok := data["globalSanity"].(map[string]any)
+	if ok {
+		for configKey, configStatus := range globalSanity {
+			statusMap, ok := configStatus.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if consistent, ok := statusMap["consistent"].(bool); ok && !consistent {
+				failures = append(failures, fmt.Sprintf("Global config inconsistency: %s", configKey))
 			}
 		}
+	}
 
-		// Check interface config sanity
-		if intfSanity, ok := data["interfaceSanity"].(map[string]any); ok {
-			for intfName, intfStatus := range intfSanity {
-				if statusMap, ok := intfStatus.(map[string]any); ok {
-					if consistent, ok := statusMap["consistent"].(bool); ok && !consistent {
-						failures = append(failures, fmt.Sprintf("Interface %s config inconsistency", intfName))
-					}
-				}
+	// Check interface config sanity
+	intfSanity, ok := data["interfaceSanity"].(map[string]any)
+	if ok {
+		for intfName, intfStatus := range intfSanity {
+			statusMap, ok := intfStatus.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if consistent, ok := statusMap["consistent"].(bool); ok && !consistent {
+				failures = append(failures, fmt.Sprintf("Interface %s config inconsistency", intfName))
 			}
 		}
+	}
 
-		// Check for any specific sanity issues
-		if issues, ok := data["issues"].([]any); ok && len(issues) > 0 {
-			for _, issue := range issues {
-				if issueStr, ok := issue.(string); ok {
-					failures = append(failures, fmt.Sprintf("Config sanity issue: %s", issueStr))
-				}
+	// Check for any specific sanity issues
+	if issues, ok := data["issues"].([]any); ok && len(issues) > 0 {
+		for _, issue := range issues {
+			if issueStr, ok := issue.(string); ok {
+				failures = append(failures, fmt.Sprintf("Config sanity issue: %s", issueStr))
 			}
 		}
 	}

@@ -78,7 +78,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	
 	// If no-connect flag is set, just display the inventory
 	if checkNoConnect {
-		fmt.Println("Inventory (without connection test):\n")
+		fmt.Print("Inventory (without connection test):\n\n")
 		for i, devConfig := range inv.Devices {
 			fmt.Printf("%d. %s (%s:%d) - Tags: %s\n", 
 				i+1, devConfig.Name, devConfig.Host, devConfig.Port, 

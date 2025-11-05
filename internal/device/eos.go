@@ -272,13 +272,13 @@ func (d *EOSDevice) executeCommand(ctx context.Context, cmd Command) (*CommandRe
 	}
 
 	if errorData, ok := result["error"]; ok {
-		errMsg := fmt.Sprintf("eAPI error: %v", errorData)
+		err := fmt.Errorf("eAPI error: %v", errorData)
 		return &CommandResult{
 			Command:   cmd,
-			Error:     fmt.Errorf(errMsg),
+			Error:     err,
 			Duration:  duration,
 			Timestamp: time.Now(),
-		}, fmt.Errorf(errMsg)
+		}, err
 	}
 
 	if resultData, ok := result["result"].([]interface{}); ok && len(resultData) > 0 {
