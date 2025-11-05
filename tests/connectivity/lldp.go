@@ -17,21 +17,25 @@ import (
 //   - Error: The test will report an error if LLDP neighbor information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLLDPNeighbors with specific neighbors
 //     VerifyLLDPNeighbors:
-//       interfaces:
-//         - interface: "Ethernet1"
-//           neighbor_device: "spine1"
-//           neighbor_port: "Ethernet1"
-//         - interface: "Ethernet2"
-//           neighbor_device: "spine2"
-//           neighbor_port: "Ethernet1"
+//     interfaces:
+//
+//   - interface: "Ethernet1"
+//     neighbor_device: "spine1"
+//     neighbor_port: "Ethernet1"
+//
+//   - interface: "Ethernet2"
+//     neighbor_device: "spine2"
+//     neighbor_port: "Ethernet1"
 //
 //   - name: VerifyLLDPNeighbors device name only
 //     VerifyLLDPNeighbors:
-//       interfaces:
-//         - interface: "Management1"
-//           neighbor_device: "mgmt-switch"
+//     interfaces:
+//
+//   - interface: "Management1"
+//     neighbor_device: "mgmt-switch"
 type VerifyLLDPNeighbors struct {
 	test.BaseTest
 	Interfaces []LLDPInterface `yaml:"interfaces" json:"interfaces"`
@@ -53,9 +57,9 @@ func NewVerifyLLDPNeighbors(inputs map[string]any) (test.Test, error) {
 	}
 
 	if inputs != nil {
-		if interfaces, ok := inputs["interfaces"].([]interface{}); ok {
+		if interfaces, ok := inputs["interfaces"].([]any); ok {
 			for _, i := range interfaces {
-				if intfMap, ok := i.(map[string]interface{}); ok {
+				if intfMap, ok := i.(map[string]any); ok {
 					intf := LLDPInterface{}
 					if name, ok := intfMap["interface"].(string); ok {
 						intf.Interface = name
@@ -143,14 +147,14 @@ func (t *VerifyLLDPNeighbors) Execute(ctx context.Context, dev device.Device) (*
 	failures := []string{}
 	for _, intf := range t.Interfaces {
 		neighbor, found := lldpNeighbors[intf.Interface]
-		
+
 		if !found {
 			failures = append(failures, fmt.Sprintf("%s: no LLDP neighbor found", intf.Interface))
 			continue
 		}
 
 		if intf.NeighborDevice != "" && !strings.Contains(strings.ToLower(neighbor.SystemName), strings.ToLower(intf.NeighborDevice)) {
-			failures = append(failures, fmt.Sprintf("%s: expected neighbor %s, got %s", 
+			failures = append(failures, fmt.Sprintf("%s: expected neighbor %s, got %s",
 				intf.Interface, intf.NeighborDevice, neighbor.SystemName))
 		}
 

@@ -17,10 +17,10 @@ import (
 // subsystems that affect device reliability and performance.
 //
 // The test performs the following checks:
-//   1. Retrieves chassis health status from all subsystems.
-//   2. Validates that all critical components are operational.
-//   3. Checks for any component failures or warnings.
-//   4. Reports overall chassis health status.
+//  1. Retrieves cooling system status including fan trays and cooling health.
+//  2. Validates power supply status and overall power system health.
+//  3. Checks temperature sensors across all card slots and modules.
+//  4. Reports any component failures, warnings, or alerts.
 //
 // Expected Results:
 //   - Success: All chassis components are healthy and operational.
@@ -28,12 +28,17 @@ import (
 //   - Error: Unable to retrieve chassis health information.
 //
 // Examples:
-//   - name: VerifyChassisHealth basic check
-//     VerifyChassisHealth: {}
 //
-//   - name: VerifyChassisHealth comprehensive validation
-//     VerifyChassisHealth:
-//       check_all_subsystems: true
+//   - name: "VerifyChassisHealth"
+//     module: "hardware"
+//     categories: ["hardware", "chassis"]
+//     inputs: {}
+//
+//   - name: "VerifyChassisHealth"
+//     module: "hardware"
+//     categories: ["hardware", "chassis"]
+//     inputs:
+//     check_all_subsystems: true
 type VerifyChassisHealth struct {
 	test.BaseTest
 	CheckAllSubsystems bool `yaml:"check_all_subsystems,omitempty" json:"check_all_subsystems,omitempty"`
@@ -71,60 +76,54 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 		return skipResult, nil
 	}
 
-	cmd := device.Command{
-		Template: "show system environment",
+	healthIssues := []string{}
+
+	// Check cooling (fans)
+	coolingCmd := device.Command{
+		Template: "show system environment cooling",
 		Format:   "json",
 		UseCache: false,
 	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
+	coolingResult, err := dev.Execute(ctx, coolingCmd)
 	if err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get chassis health data: %v", err)
+		result.Message = fmt.Sprintf("Failed to get cooling data: %v", err)
 		return result, nil
 	}
+	if coolingData, ok := coolingResult.Output.(map[string]any); ok {
+		t.checkCoolingHealth(coolingData, &healthIssues)
+	}
 
-	healthIssues := []string{}
+	// Check power supplies
+	powerCmd := device.Command{
+		Template: "show system environment power",
+		Format:   "json",
+		UseCache: false,
+	}
+	powerResult, err := dev.Execute(ctx, powerCmd)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Failed to get power data: %v", err)
+		return result, nil
+	}
+	if powerData, ok := powerResult.Output.(map[string]any); ok {
+		t.checkPowerHealth(powerData, &healthIssues)
+	}
 
-	if envData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check overall system status
-		if systemStatus, ok := envData["systemStatus"].(string); ok {
-			if !strings.EqualFold(systemStatus, "ok") {
-				healthIssues = append(healthIssues, fmt.Sprintf("System status: %s", systemStatus))
-			}
-		}
-
-		// Check power supplies health
-		if powerSupplies, ok := envData["powerSupplySlots"].(map[string]any); ok {
-			for psName, psData := range powerSupplies {
-				if ps, ok := psData.(map[string]any); ok {
-					t.checkPowerSupplyHealth(psName, ps, &healthIssues)
-				}
-			}
-		}
-
-		// Check fan trays health
-		if fanTrays, ok := envData["fanTraySlots"].(map[string]any); ok {
-			for fanTrayName, fanTrayData := range fanTrays {
-				if fanTray, ok := fanTrayData.(map[string]any); ok {
-					t.checkFanTrayHealth(fanTrayName, fanTray, &healthIssues)
-				}
-			}
-		}
-
-		// Check temperature sensors health
-		if tempSensors, ok := envData["tempSensors"].([]any); ok {
-			for _, sensor := range tempSensors {
-				if s, ok := sensor.(map[string]any); ok {
-					t.checkTemperatureSensorHealth(s, &healthIssues)
-				}
-			}
-		}
-
-		// Check additional subsystems if requested
-		if t.CheckAllSubsystems {
-			t.checkAdditionalSubsystems(envData, &healthIssues)
-		}
+	// Check temperature sensors
+	tempCmd := device.Command{
+		Template: "show system environment temperature",
+		Format:   "json",
+		UseCache: false,
+	}
+	tempResult, err := dev.Execute(ctx, tempCmd)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Failed to get temperature data: %v", err)
+		return result, nil
+	}
+	if tempData, ok := tempResult.Output.(map[string]any); ok {
+		t.checkTemperatureHealth(tempData, &healthIssues)
 	}
 
 	if len(healthIssues) > 0 {
@@ -135,51 +134,115 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 	return result, nil
 }
 
-func (t *VerifyChassisHealth) checkPowerSupplyHealth(psName string, psData map[string]any, issues *[]string) {
-	if state, ok := psData["state"].(string); ok {
-		if !strings.EqualFold(state, "ok") && !strings.EqualFold(state, "powerGood") {
-			*issues = append(*issues, fmt.Sprintf("Power supply %s: %s", psName, state))
+func (t *VerifyChassisHealth) checkCoolingHealth(coolingData map[string]any, issues *[]string) {
+	// Check overall cooling status
+	if systemStatus, ok := coolingData["systemStatus"].(string); ok {
+		if !strings.EqualFold(systemStatus, "coolingOk") {
+			*issues = append(*issues, fmt.Sprintf("Cooling system status: %s", systemStatus))
+		}
+	}
+
+	// Check individual fan trays
+	if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
+		for fanTrayName, fanTrayData := range fanTrays {
+			if fanTray, ok := fanTrayData.(map[string]any); ok {
+				if status, ok := fanTray["status"].(string); ok {
+					if !strings.EqualFold(status, "ok") {
+						*issues = append(*issues, fmt.Sprintf("Fan tray %s: %s", fanTrayName, status))
+					}
+				}
+			}
+		}
+	}
+
+	// Check if requested for additional subsystem checks
+	if t.CheckAllSubsystems {
+		if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
+			for psName, psData := range powerSupplies {
+				if ps, ok := psData.(map[string]any); ok {
+					if fanStatus, ok := ps["fanStatus"].(string); ok {
+						if !strings.EqualFold(fanStatus, "ok") {
+							*issues = append(*issues, fmt.Sprintf("Power supply %s fan: %s", psName, fanStatus))
+						}
+					}
+				}
+			}
 		}
 	}
 }
 
-func (t *VerifyChassisHealth) checkFanTrayHealth(fanTrayName string, fanTrayData map[string]any, issues *[]string) {
-	if state, ok := fanTrayData["state"].(string); ok {
-		if !strings.EqualFold(state, "ok") && !strings.EqualFold(state, "inserted") {
-			*issues = append(*issues, fmt.Sprintf("Fan tray %s: %s", fanTrayName, state))
+func (t *VerifyChassisHealth) checkPowerHealth(powerData map[string]any, issues *[]string) {
+	// Check overall power status
+	if systemStatus, ok := powerData["systemStatus"].(string); ok {
+		if !strings.EqualFold(systemStatus, "powerOk") {
+			*issues = append(*issues, fmt.Sprintf("Power system status: %s", systemStatus))
+		}
+	}
+
+	// Check individual power supplies
+	if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
+		for psName, psData := range powerSupplies {
+			if ps, ok := psData.(map[string]any); ok {
+				if state, ok := ps["state"].(string); ok {
+					if !strings.EqualFold(state, "ok") && !strings.EqualFold(state, "powerGood") {
+						*issues = append(*issues, fmt.Sprintf("Power supply %s: %s", psName, state))
+					}
+				}
+			}
 		}
 	}
 }
 
-func (t *VerifyChassisHealth) checkTemperatureSensorHealth(sensorData map[string]any, issues *[]string) {
-	var sensorName string
-	if name, ok := sensorData["name"].(string); ok {
-		sensorName = name
-	} else if description, ok := sensorData["description"].(string); ok {
-		sensorName = description
-	} else {
-		sensorName = "Unknown"
-	}
-
-	if alertState, ok := sensorData["alertState"].(string); ok {
-		if !strings.EqualFold(alertState, "ok") {
-			*issues = append(*issues, fmt.Sprintf("Temperature sensor %s: %s", sensorName, alertState))
-		}
-	}
-}
-
-func (t *VerifyChassisHealth) checkAdditionalSubsystems(envData map[string]any, issues *[]string) {
-	// Check cooling status
-	if coolingStatus, ok := envData["systemCoolingStatus"].(string); ok {
-		if !strings.EqualFold(coolingStatus, "coolingOk") {
-			*issues = append(*issues, fmt.Sprintf("Cooling status: %s", coolingStatus))
+func (t *VerifyChassisHealth) checkTemperatureHealth(tempData map[string]any, issues *[]string) {
+	// Check overall system status
+	if systemStatus, ok := tempData["systemStatus"].(string); ok {
+		if !strings.EqualFold(systemStatus, "temperatureOk") {
+			*issues = append(*issues, fmt.Sprintf("Temperature system status: %s", systemStatus))
 		}
 	}
 
-	// Check power status
-	if powerStatus, ok := envData["powerStatus"].(string); ok {
-		if !strings.EqualFold(powerStatus, "powerOk") {
-			*issues = append(*issues, fmt.Sprintf("Power status: %s", powerStatus))
+	// Check temperature sensors
+	if cardSlots, ok := tempData["cardSlots"].(map[string]any); ok {
+		for cardName, cardData := range cardSlots {
+			if card, ok := cardData.(map[string]any); ok {
+				if tempSensors, ok := card["tempSensors"].(map[string]any); ok {
+					for sensorName, sensorData := range tempSensors {
+						if sensor, ok := sensorData.(map[string]any); ok {
+							if hwStatus, ok := sensor["hwStatus"].(string); ok {
+								if !strings.EqualFold(hwStatus, "ok") {
+									*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %s", cardName, sensorName, hwStatus))
+								}
+							}
+							if alertCount, ok := sensor["alertCount"].(float64); ok {
+								if alertCount > 0 {
+									*issues = append(*issues, fmt.Sprintf("Temperature sensor %s/%s: %d alerts", cardName, sensorName, int(alertCount)))
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check power supply temperature sensors if CheckAllSubsystems is enabled
+	if t.CheckAllSubsystems {
+		if powerSupplies, ok := tempData["powerSupplySlots"].(map[string]any); ok {
+			for psName, psData := range powerSupplies {
+				if ps, ok := psData.(map[string]any); ok {
+					if tempSensors, ok := ps["tempSensors"].(map[string]any); ok {
+						for sensorName, sensorData := range tempSensors {
+							if sensor, ok := sensorData.(map[string]any); ok {
+								if hwStatus, ok := sensor["hwStatus"].(string); ok {
+									if !strings.EqualFold(hwStatus, "ok") {
+										*issues = append(*issues, fmt.Sprintf("Power supply %s temp sensor %s: %s", psName, sensorName, hwStatus))
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -189,39 +252,12 @@ func (t *VerifyChassisHealth) ValidateInput(input any) error {
 	return nil
 }
 
-// VerifyHardwareCapacityUtilization verifies hardware capacity utilization.
-//
-// This test monitors hardware resource utilization including forwarding table entries,
-// route table usage, ACL table entries, and other hardware-dependent resources to
-// ensure the device is operating within capacity limits.
-//
-// The test performs the following checks:
-//   1. Retrieves hardware capacity statistics for various resource types.
-//   2. Calculates utilization percentages for each monitored resource.
-//   3. Compares utilization against configurable thresholds.
-//   4. Reports resources approaching or exceeding capacity limits.
-//
-// Expected Results:
-//   - Success: All hardware resources are within acceptable utilization limits.
-//   - Failure: One or more resources exceed utilization thresholds.
-//   - Error: Unable to retrieve hardware capacity data.
-//
-// Examples:
-//   - name: VerifyHardwareCapacityUtilization basic check
-//     VerifyHardwareCapacityUtilization: {}
-//
-//   - name: VerifyHardwareCapacityUtilization with custom thresholds
-//     VerifyHardwareCapacityUtilization:
-//       max_utilization_pct: 80
-//       check_forwarding_table: true
-//       check_route_table: true
-//       check_acl_table: true
 type VerifyHardwareCapacityUtilization struct {
 	test.BaseTest
-	MaxUtilizationPct     int  `yaml:"max_utilization_pct,omitempty" json:"max_utilization_pct,omitempty"`
-	CheckForwardingTable  bool `yaml:"check_forwarding_table,omitempty" json:"check_forwarding_table,omitempty"`
-	CheckRouteTable       bool `yaml:"check_route_table,omitempty" json:"check_route_table,omitempty"`
-	CheckAclTable         bool `yaml:"check_acl_table,omitempty" json:"check_acl_table,omitempty"`
+	MaxUtilizationPct    int  `yaml:"max_utilization_pct,omitempty" json:"max_utilization_pct,omitempty"`
+	CheckForwardingTable bool `yaml:"check_forwarding_table,omitempty" json:"check_forwarding_table,omitempty"`
+	CheckRouteTable      bool `yaml:"check_route_table,omitempty" json:"check_route_table,omitempty"`
+	CheckAclTable        bool `yaml:"check_acl_table,omitempty" json:"check_acl_table,omitempty"`
 }
 
 func NewVerifyHardwareCapacityUtilization(inputs map[string]any) (test.Test, error) {
@@ -404,10 +440,10 @@ func (t *VerifyHardwareCapacityUtilization) ValidateInput(input any) error {
 // detecting hardware failures and ensuring system reliability.
 //
 // The test performs the following checks:
-//   1. Retrieves status for all installed modules in the chassis.
-//   2. Validates that modules are in operational states.
-//   3. Checks for power stability and proper module initialization.
-//   4. Reports any modules with failures or warnings.
+//  1. Retrieves status for all installed modules in the chassis.
+//  2. Validates that modules are in operational states.
+//  3. Checks for power stability and proper module initialization.
+//  4. Reports any modules with failures or warnings.
 //
 // Expected Results:
 //   - Success: All installed modules are operational and stable.
@@ -415,17 +451,18 @@ func (t *VerifyHardwareCapacityUtilization) ValidateInput(input any) error {
 //   - Error: Unable to retrieve module status information.
 //
 // Examples:
+//
 //   - name: VerifyModuleStatus basic check
 //     VerifyModuleStatus: {}
 //
 //   - name: VerifyModuleStatus with power validation
 //     VerifyModuleStatus:
-//       check_power_status: true
-//       check_temperature: true
+//     check_power_status: true
+//     check_temperature: true
 type VerifyModuleStatus struct {
 	test.BaseTest
-	CheckPowerStatus  bool `yaml:"check_power_status,omitempty" json:"check_power_status,omitempty"`
-	CheckTemperature  bool `yaml:"check_temperature,omitempty" json:"check_temperature,omitempty"`
+	CheckPowerStatus bool `yaml:"check_power_status,omitempty" json:"check_power_status,omitempty"`
+	CheckTemperature bool `yaml:"check_temperature,omitempty" json:"check_temperature,omitempty"`
 }
 
 func NewVerifyModuleStatus(inputs map[string]any) (test.Test, error) {

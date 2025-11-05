@@ -1,32 +1,47 @@
 # Example test catalog for GANTA
 
 tests:
-  # Connectivity Tests
-  - name: "VerifyReachability"
-    module: "connectivity"
-    categories: ["connectivity", "basic"]
-    inputs:
-      hosts:
-        - destination: "8.8.8.8"
-          vrf: "management"
-          reachable: true
-        - destination: "1.1.1.1"
-          vrf: "management"
-          reachable: true
-      repeat: 2
-      size: 100
+  # # Connectivity Tests
+  # - name: "VerifyReachability"
+  #   module: "connectivity"
+  #   categories: ["connectivity", "basic"]
+  #   inputs:
+  #     hosts:
+  #       - destination: "8.8.8.8"
+  #         vrf: "management"
+  #         reachable: true
+  #       - destination: "1.1.1.1"
+  #         vrf: "management"
+  #         reachable: true
+  #     repeat: 2
+  #     size: 100
 
+# wdl-200-50-r203a-tor-01#show lldp neighbors
+# Last table change time   : 2 days, 21:12:58 ago
+# Number of table inserts  : 3
+# Number of table deletes  : 0
+# Number of table drops    : 0
+# Number of table age-outs : 0
+
+# Port           Neighbor Device ID                 Neighbor Port ID    TTL
+# ----------- ---------------------------------- ---------------------- ---
+# Et1/1          wdl-200-50-r106-eth-spine-01       Ethernet7/1         120
+# Et3/1          wdl-200-50-r105-eth-spine-01       Ethernet7/1         120
+# Ma1            wdl-200-50-r107-oob-leaf-01        Ethernet32          120
   - name: "VerifyLLDPNeighbors"
     module: "connectivity"
     categories: ["connectivity", "lldp"]
     inputs:
       interfaces:
-        - interface: "Ethernet9/1"
-          neighbor_device: "wdl-200-50-r104-eth-spine-01"
-          neighbor_port: "Ethernet1/1"
-        - interface: "Ethernet10/1"
-          neighbor_device: "wdl-200-50-r103-eth-spine-01"
-          neighbor_port: "Ethernet1/1"
+        - interface: "Ethernet1/1"
+          neighbor_device: "wdl-200-50-r106-eth-spine-01"
+          neighbor_port: "Ethernet7/1"
+        - interface: "Ethernet3/1"
+          neighbor_device: "wdl-200-50-r105-eth-spine-01"
+          neighbor_port: "Ethernet7/1"
+        - interface: "Management1"
+          neighbor_device: "wdl-200-50-r107-oob-leaf-01"
+          neighbor_port: "Ethernet32"
 
   # Hardware Tests
   - name: "VerifyTemperature"
@@ -49,20 +64,25 @@ tests:
     module: "hardware"
     categories: ["hardware", "power"]
     inputs:
-      minimum_supplies: 2
+      minimum_supplies: 10
 
-  # Routing Tests
-  - name: "VerifyBGPPeers"
-    module: "routing"
-    categories: ["routing", "bgp"]
+  - name: "VerifyChassisHealth"
+    module: "hardware"
+    categories: ["hardware", "chassis"]
     inputs:
-      peers:
-        - peer: "10.0.0.1"
-          state: "Established"
-          asn: 65001
-        - peer: "10.0.0.2"
-          state: "Established"
-          asn: 65002
+      check_all_subsystems: true
+  # Routing Tests
+  # - name: "VerifyBGPPeers"
+  #   module: "routing"
+  #   categories: ["routing", "bgp"]
+  #   inputs:
+  #     peers:
+  #       - peer: "10.0.0.1"
+  #         state: "Established"
+  #         asn: 65001
+  #       - peer: "10.0.0.2"
+  #         state: "Established"
+  #         asn: 65002
 
   # BGP IPv6 Tests
   - name: "VerifyBGPPeerCount"
@@ -91,26 +111,26 @@ tests:
           safi: "unicast"
           vrf: "default"
 
-  - name: "VerifyBGPSpecificPeers"
-    module: "routing"
-    categories: ["routing", "bgp", "ipv6"]
-    inputs:
-      address_families:
-        - afi: "ipv6"
-          safi: "unicast"
-          bgp_peers:
-            - peer_address: "2001:db8::1"
-              afi: "ipv6"
-              safi: "unicast"
-              next_hop: "2001:db8::1"
-              rx_prefixes: 10
-              tx_prefixes: 20
-            - peer_address: "2001:db8::2"
-              afi: "ipv6"
-              safi: "unicast"
-              next_hop: "2001:db8::2"
-              rx_prefixes: 15
-              tx_prefixes: 25
+  # - name: "VerifyBGPSpecificPeers"
+  #   module: "routing"
+  #   categories: ["routing", "bgp", "ipv6"]
+  #   inputs:
+  #     address_families:
+  #       - afi: "ipv6"
+  #         safi: "unicast"
+  #         bgp_peers:
+  #           - peer_address: "2001:db8::1"
+  #             afi: "ipv6"
+  #             safi: "unicast"
+  #             next_hop: "2001:db8::1"
+  #             rx_prefixes: 10
+  #             tx_prefixes: 20
+  #           - peer_address: "2001:db8::2"
+  #             afi: "ipv6"
+  #             safi: "unicast"
+  #             next_hop: "2001:db8::2"
+  #             rx_prefixes: 15
+  #             tx_prefixes: 25
 
   # - name: "VerifyOSPFNeighbors"
   #   module: "routing"
@@ -144,7 +164,7 @@ tests:
     module: "system"
     categories: ["system", "availability"]
     inputs:
-      minimum_uptime: 3600
+      minimum_uptime: 120
 
   - name: "VerifyNTP"
     module: "system"
@@ -169,6 +189,14 @@ tests:
         - "www.google.com"
         - "www.arista.com"
 
+# wdl-200-50-r203a-tor-01#show ip bgp summary
+# BGP summary information for VRF default
+# Router identifier 10.0.0.35, local AS number 65135
+# Neighbor Status Codes: m - Under maintenance
+#   Neighbor                        V AS           MsgRcvd   MsgSent  InQ OutQ  Up/Down State   PfxRcd PfxAcc PfxAdv
+#   fe80::ee8a:48ff:fec1:2241%Et1/1 4 65103           4972      4940    0    0    2d22h Estab   23     23     3
+#   fe80::ee8a:48ff:fec1:3899%Et3/1 4 65104           4954      4953    0    0    2d22h Estab   23     23     24
+
   - name: "VerifyBGPUnnumbered"
     module: "routing"
     categories: ["routing", "bgp", "unnumbered"]
@@ -176,12 +204,12 @@ tests:
       vrf: "default"
       interfaces:
         # Leaf-to-Spine connections using BGP unnumbered
-        - interface: "Et10/1"
+        - interface: "Et1/1"
           remote_asn: 65103
           expected_state: "Established"
           description: "Connection to spine1"
         
-        - interface: "Et9/1"
+        - interface: "Et3/1"
           remote_asn: 65104
           expected_state: "Established"
           description: "Connection to spine2"
