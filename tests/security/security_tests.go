@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fluidstack/go-anta/pkg/device"
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/device"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 // VerifySSHStatus verifies if the SSHD agent is disabled in the default VRF.

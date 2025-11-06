@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/fluidstack/go-anta/pkg/device"
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/device"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 // VerifyZeroTouch verifies that ZeroTouch is disabled on the device.

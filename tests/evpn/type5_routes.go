@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/fluidstack/go-anta/pkg/device"
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/device"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 // VerifyEVPNType5Routes verifies EVPN Type-5 routes for given IP prefixes and VNIs.

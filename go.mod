@@ -1,4 +1,4 @@
-module github.com/fluidstack/go-anta
+module github.com/fluidstackio/go-anta
 
 go 1.25.0
 

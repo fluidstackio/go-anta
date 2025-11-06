@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fluidstack/go-anta/pkg/device"
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/device"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 // VerifyStaticRoutes verifies that static routes are configured and active in the routing table.

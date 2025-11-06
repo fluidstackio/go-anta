@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 type CSVReporter struct {

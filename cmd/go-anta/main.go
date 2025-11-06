@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fluidstack/go-anta/internal/cli"
-	_ "github.com/fluidstack/go-anta/tests"
+	"github.com/fluidstackio/go-anta/internal/cli"
+	_ "github.com/fluidstackio/go-anta/tests"
 )
 
 func main() {

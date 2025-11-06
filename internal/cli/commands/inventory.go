@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/fluidstack/go-anta/pkg/inventory"
+	"github.com/fluidstackio/go-anta/pkg/inventory"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
