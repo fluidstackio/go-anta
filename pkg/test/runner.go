@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fluidstack/go-anta/pkg/device"
-	"github.com/fluidstack/go-anta/internal/logger"
+	"github.com/fluidstackio/go-anta/pkg/device"
+	"github.com/fluidstackio/go-anta/internal/logger"
 )
 
 type Runner struct {

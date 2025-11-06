@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fluidstack/go-anta/internal/logger"
+	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

@@ -3,7 +3,7 @@ package reporter
 import (
 	"io"
 
-	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
 type Reporter interface {

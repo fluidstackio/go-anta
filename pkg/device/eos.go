@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 	
-	"github.com/fluidstack/go-anta/internal/logger"
+	"github.com/fluidstackio/go-anta/internal/logger"
 )
 
 type EOSDevice struct {
