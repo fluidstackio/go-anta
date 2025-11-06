@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/platform"
-	"github.com/gavmckee/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/platform"
+	"github.com/fluidstack/go-anta/pkg/test"
 )
 
 // VerifyInventory verifies that the device hardware inventory meets specified requirements.

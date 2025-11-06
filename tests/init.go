@@ -1,20 +1,20 @@
 package tests
 
 import (
-	"github.com/gavmckee/go-anta/pkg/test"
-	"github.com/gavmckee/go-anta/tests/connectivity"
-	"github.com/gavmckee/go-anta/tests/evpn"
-	"github.com/gavmckee/go-anta/tests/hardware"
-	"github.com/gavmckee/go-anta/tests/interfaces"
-	"github.com/gavmckee/go-anta/tests/logging"
-	"github.com/gavmckee/go-anta/tests/routing"
-	"github.com/gavmckee/go-anta/tests/security"
-	"github.com/gavmckee/go-anta/tests/services"
-	"github.com/gavmckee/go-anta/tests/software"
-	"github.com/gavmckee/go-anta/tests/stp"
-	"github.com/gavmckee/go-anta/tests/system"
-	"github.com/gavmckee/go-anta/tests/vlan"
-	"github.com/gavmckee/go-anta/tests/vxlan"
+	"github.com/fluidstack/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/tests/connectivity"
+	"github.com/fluidstack/go-anta/tests/evpn"
+	"github.com/fluidstack/go-anta/tests/hardware"
+	"github.com/fluidstack/go-anta/tests/interfaces"
+	"github.com/fluidstack/go-anta/tests/logging"
+	"github.com/fluidstack/go-anta/tests/routing"
+	"github.com/fluidstack/go-anta/tests/security"
+	"github.com/fluidstack/go-anta/tests/services"
+	"github.com/fluidstack/go-anta/tests/software"
+	"github.com/fluidstack/go-anta/tests/stp"
+	"github.com/fluidstack/go-anta/tests/system"
+	"github.com/fluidstack/go-anta/tests/vlan"
+	"github.com/fluidstack/go-anta/tests/vxlan"
 )
 
 func init() {

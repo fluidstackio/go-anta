@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/device"
 )
 
 type Test interface {

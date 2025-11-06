@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/test"
 )
 
 // VerifySyslogLogging verifies if syslog logging is enabled.

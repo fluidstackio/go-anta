@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/inventory"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/inventory"
 	"github.com/spf13/cobra"
 )
 

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/inventory"
-	"github.com/gavmckee/go-anta/internal/logger"
-	"github.com/gavmckee/go-anta/pkg/reporter"
-	"github.com/gavmckee/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/inventory"
+	"github.com/fluidstack/go-anta/internal/logger"
+	"github.com/fluidstack/go-anta/pkg/reporter"
+	"github.com/fluidstack/go-anta/pkg/test"
 	"github.com/spf13/cobra"
 )
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/test"
 )
 
 // VerifyVxlanConfigSanity verifies that there are no VXLAN configuration inconsistencies.

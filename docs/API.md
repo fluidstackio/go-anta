@@ -190,7 +190,7 @@ package test
 
 import (
     "context"
-    "github.com/gavmckee/go-anta/internal/device"
+    "github.com/fluidstack/go-anta/internal/device"
 )
 
 type Test interface {
@@ -1059,10 +1059,10 @@ import (
     "fmt"
     "os"
 
-    "github.com/gavmckee/go-anta/internal/device"
-    "github.com/gavmckee/go-anta/internal/inventory"
-    "github.com/gavmckee/go-anta/internal/reporter"
-    "github.com/gavmckee/go-anta/internal/test"
+    "github.com/fluidstack/go-anta/internal/device"
+    "github.com/fluidstack/go-anta/internal/inventory"
+    "github.com/fluidstack/go-anta/internal/reporter"
+    "github.com/fluidstack/go-anta/internal/test"
 )
 
 func main() {
@@ -1122,8 +1122,8 @@ import (
     "context"
     "fmt"
 
-    "github.com/gavmckee/go-anta/internal/device"
-    "github.com/gavmckee/go-anta/internal/test"
+    "github.com/fluidstack/go-anta/internal/device"
+    "github.com/fluidstack/go-anta/internal/test"
 )
 
 type VerifyCustomProtocol struct {
@@ -1216,7 +1216,7 @@ import (
     "context"
     "fmt"
 
-    "github.com/gavmckee/go-anta/internal/inventory"
+    "github.com/fluidstack/go-anta/internal/inventory"
 )
 
 func main() {

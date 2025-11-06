@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gavmckee/go-anta/pkg/device"
-	"github.com/gavmckee/go-anta/pkg/platform"
-	"github.com/gavmckee/go-anta/pkg/test"
+	"github.com/fluidstack/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/platform"
+	"github.com/fluidstack/go-anta/pkg/test"
 )
 
 // VerifyUnifiedForwardingTableMode verifies the device is using the expected UFT (Unified Forwarding Table) mode.

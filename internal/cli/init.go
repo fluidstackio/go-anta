@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/gavmckee/go-anta/internal/cli/commands"
+	"github.com/fluidstack/go-anta/internal/cli/commands"
 )
 
 func init() {
