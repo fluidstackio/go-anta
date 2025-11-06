@@ -41,7 +41,7 @@ go-anta (Golang ANTA) is a high-performance network testing framework inspired b
 
 ```bash
 # Clone the repository
-git clone https://github.com/gmckee/go-anta.git
+git clone https://github.com/fluidstack/go-anta.git
 cd go-anta
 
 # Build the binary
@@ -980,7 +980,7 @@ Contributions are welcome! This project follows standard Go development practice
 ### Development Setup
 
 ```bash
-git clone https://github.com/gavmckee/go-anta.git
+git clone https://github.com/fluidstack/go-anta.git
 cd go-anta
 go mod tidy
 make test

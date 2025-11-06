@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gavmckee/go-anta/pkg/device"
+	"github.com/fluidstack/go-anta/pkg/device"
 	"github.com/jedib0t/go-pretty/v6/progress"
 )
 
