@@ -30,10 +30,27 @@ func NewEOSDevice(config DeviceConfig) *EOSDevice {
 		config.Timeout = 30 * time.Second
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: config.Insecure,
+	// Configure TLS for compatibility with Arista EOS devices
+	// Many Arista devices use older TLS versions and cipher suites
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: config.Insecure,
+		MinVersion:         tls.VersionTLS10, // Support older TLS versions for compatibility
+		MaxVersion:         0,                 // Allow any TLS version (0 means use Go's default max)
+		// Include legacy cipher suites for older EOS versions
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 		},
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig:       tlsConfig,
 		DisableKeepAlives:     true,  // Disable connection reuse
 		DisableCompression:    true,  // Disable compression
 		MaxIdleConns:          1,     // Limit idle connections
