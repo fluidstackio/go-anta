@@ -50,6 +50,7 @@ type DeviceConfig struct {
 	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Timeout        time.Duration     `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Transport      string            `yaml:"transport,omitempty" json:"transport,omitempty"`
 	DisableCache   bool              `yaml:"disable_cache,omitempty" json:"disable_cache,omitempty"`
 	Extra          map[string]string `yaml:"extra,omitempty" json:"extra,omitempty"`
 }
