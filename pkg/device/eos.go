@@ -47,13 +47,19 @@ func NewEOSDevice(config DeviceConfig) *EOSDevice {
 		},
 	}
 
+	// Per-device transport. Keep-alives are on so concurrent test workers
+	// against the same device share TCP+TLS connections; without this each
+	// command pays a full handshake and TIME_WAIT-accumulates ephemeral
+	// ports under load. MaxConnsPerHost caps simultaneous in-flight
+	// requests against a single device to avoid stampeding its control
+	// plane.
 	tr := &http.Transport{
 		TLSClientConfig:       tlsConfig,
-		DisableKeepAlives:     true,  // Disable connection reuse
-		DisableCompression:    true,  // Disable compression
-		MaxIdleConns:          1,     // Limit idle connections
-		MaxIdleConnsPerHost:   1,     // Limit idle connections per host
-		IdleConnTimeout:       10 * time.Second,
+		DisableCompression:    true,
+		MaxIdleConns:          16,
+		MaxIdleConnsPerHost:   16,
+		MaxConnsPerHost:       16,
+		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
@@ -124,6 +130,9 @@ func (d *EOSDevice) Disconnect() error {
 	d.State = ConnectionStateClosed
 	if d.cache != nil {
 		d.cache.Clear()
+	}
+	if d.client != nil {
+		d.client.CloseIdleConnections()
 	}
 	return nil
 }
