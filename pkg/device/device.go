@@ -61,8 +61,8 @@ type DeviceConfig struct {
 // through unintended `logger.Debugf("config: %+v", cfg)` calls.
 func (c DeviceConfig) String() string {
 	return fmt.Sprintf(
-		"DeviceConfig{Name:%s Host:%s Port:%d Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Timeout:%s Insecure:%t}",
-		c.Name, c.Host, c.Port, c.Username, redactedIfSet(c.EnablePassword), c.Tags, c.Timeout, c.Insecure,
+		"DeviceConfig{Name:%s Host:%s Port:%d Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Timeout:%s Insecure:%t Transport:%s}",
+		c.Name, c.Host, c.Port, c.Username, redactedIfSet(c.EnablePassword), c.Tags, c.Timeout, c.Insecure, c.Transport,
 	)
 }
 

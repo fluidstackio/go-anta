@@ -1,6 +1,7 @@
 package device
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -36,6 +37,11 @@ func TestNew_DispatchAndDefaults(t *testing.T) {
 			cfg:        DeviceConfig{Name: "d1", Host: "10.0.0.1", Transport: "smtp"},
 			wantErrSub: "unknown transport",
 		},
+		{
+			name:       "gnmi transport not yet implemented",
+			cfg:        DeviceConfig{Name: "d1", Host: "10.0.0.1", Transport: "gnmi"},
+			wantErrSub: "not yet implemented",
+		},
 	}
 
 	for _, tc := range tests {
@@ -50,7 +56,7 @@ func TestNew_DispatchAndDefaults(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			gotType := stringifyType(dev)
+			gotType := fmt.Sprintf("%T", dev)
 			if gotType != tc.wantConcrete {
 				t.Errorf("concrete type: got %s, want %s", gotType, tc.wantConcrete)
 			}
@@ -60,21 +66,5 @@ func TestNew_DispatchAndDefaults(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func stringifyType(v interface{}) string {
-	if v == nil {
-		return "<nil>"
-	}
-	return "*device." + typeName(v)
-}
-
-func typeName(v interface{}) string {
-	switch v.(type) {
-	case *EOSDevice:
-		return "EOSDevice"
-	default:
-		return "Unknown"
 	}
 }
