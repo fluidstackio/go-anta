@@ -41,6 +41,7 @@ var (
 	quiet             bool
 	progress          bool
 	silent            bool
+	transport         string
 )
 
 var NrfuCmd = &cobra.Command{
@@ -64,6 +65,7 @@ func init() {
 	NrfuCmd.Flags().StringVar(&limit, "limit", "", "limit devices: hostname, comma-separated list (host1,host2), index (0), range (0-2), or wildcard (leaf*)")
 	NrfuCmd.Flags().StringVar(&deviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	NrfuCmd.Flags().StringVar(&devicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
+	NrfuCmd.Flags().StringVar(&transport, "transport", "", "transport for device connections (eapi, gnmi). Overrides per-device YAML transport when set.")
 	NrfuCmd.Flags().IntVarP(&concurrency, "concurrency", "j", 10, "maximum concurrent connections")
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
 	NrfuCmd.Flags().BoolVar(&ignoreStatus, "ignore-status", false, "always return exit code 0")
@@ -160,7 +162,14 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 
 	deviceList := make([]device.Device, 0, len(inv.Devices))
 	for _, devConfig := range inv.Devices {
-		dev := device.NewEOSDevice(devConfig)
+		if transport != "" {
+			devConfig.Transport = transport
+		}
+		dev, err := device.New(devConfig)
+		if err != nil {
+			logger.Errorf("Failed to construct device %s: %v", devConfig.Name, err)
+			continue
+		}
 		if err := dev.Connect(ctx); err != nil {
 			if !silent {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to connect to %s: %v\n", devConfig.Name, err)
