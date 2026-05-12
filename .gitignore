@@ -48,8 +48,8 @@ dist/
 tmp/
 temp/
 
-# Debug files
-debug
+# Debug binary (root-level compiled output only; cmd/debug/ is the source dir)
+/debug
 
 # Binary
 /go-anta
