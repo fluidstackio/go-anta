@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -98,10 +99,31 @@ func (r *Runner) Run(ctx context.Context, tests []TestDefinition, devices []devi
 	return allResults, nil
 }
 
-func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device.Device) TestResult {
+func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device.Device) (result TestResult) {
 	start := time.Now()
 	logger.Debugf("Running test %s on device %s", testDef.Name, dev.Name())
-	
+
+	// Catch panics from test implementations (e.g. unchecked type assertions
+	// on unexpected device output). Without this, a single panicking test
+	// would crash its worker, leak the semaphore slot, and silently truncate
+	// the run.
+	defer func() {
+		if p := recover(); p != nil {
+			stack := debug.Stack()
+			logger.Errorf("Test %s panicked on device %s: %v\n%s", testDef.Name, dev.Name(), p, stack)
+			result = TestResult{
+				TestName:   testDef.Name,
+				DeviceName: dev.Name(),
+				Status:     TestError,
+				Message:    fmt.Sprintf("panic: %v", p),
+				Duration:   time.Since(start),
+				Timestamp:  time.Now(),
+				Categories: testDef.Categories,
+				Details:    string(stack),
+			}
+		}
+	}()
+
 	if !dev.IsEstablished() {
 		logger.Errorf("Device %s not connected for test %s", dev.Name(), testDef.Name)
 		return TestResult{
@@ -142,7 +164,7 @@ func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device
 	}
 
 	logger.Debugf("Executing test %s on device %s", testDef.Name, dev.Name())
-	result, err := testImpl.Execute(ctx, dev)
+	execResult, err := testImpl.Execute(ctx, dev)
 	if err != nil {
 		logger.Errorf("Test %s failed on device %s: %v", testDef.Name, dev.Name(), err)
 		return TestResult{
@@ -156,20 +178,20 @@ func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device
 		}
 	}
 
-	result.Duration = time.Since(start)
-	result.Timestamp = time.Now()
-	
-	if result.Status == TestSuccess {
-		logger.Infof("Test %s passed on device %s (%.2fs)", testDef.Name, dev.Name(), result.Duration.Seconds())
-	} else if result.Status == TestFailure {
-		logger.Warnf("Test %s failed on device %s: %s (%.2fs)", testDef.Name, dev.Name(), result.Message, result.Duration.Seconds())
-	}
-	
-	if result.Categories == nil {
-		result.Categories = testDef.Categories
+	execResult.Duration = time.Since(start)
+	execResult.Timestamp = time.Now()
+
+	if execResult.Status == TestSuccess {
+		logger.Infof("Test %s passed on device %s (%.2fs)", testDef.Name, dev.Name(), execResult.Duration.Seconds())
+	} else if execResult.Status == TestFailure {
+		logger.Warnf("Test %s failed on device %s: %s (%.2fs)", testDef.Name, dev.Name(), execResult.Message, execResult.Duration.Seconds())
 	}
 
-	return *result
+	if execResult.Categories == nil {
+		execResult.Categories = testDef.Categories
+	}
+
+	return *execResult
 }
 
 func (r *Runner) GetResults() []TestResult {
