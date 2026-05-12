@@ -128,6 +128,8 @@ func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, 
 	start := time.Now()
 	expanded := d.expandTemplate(cmd)
 
+	// Both "" and "json" map to json_ietf; only "text" requests ASCII.
+	// Task 6 (ExecuteBatch) replicates this mapping — keep them in sync.
 	encoding := "json_ietf"
 	if cmd.Format == "text" {
 		encoding = "ascii"
@@ -148,7 +150,7 @@ func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, 
 
 	output, err := extractCLIOutput(resp, expanded, encoding)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("device %s: %w", d.Config.Name, err)
 	}
 
 	result := &CommandResult{
@@ -189,6 +191,8 @@ func extractCLIOutput(resp *gnmipb.GetResponse, expanded, encoding string) (inte
 func extractTypedValue(val *gnmipb.TypedValue, expanded, encoding string) (interface{}, error) {
 	switch encoding {
 	case "ascii":
+		// Empty output is a valid response (e.g. a command that ran successfully
+		// and produced no text); return "" rather than erroring.
 		if s := val.GetAsciiVal(); s != "" {
 			return s, nil
 		}
