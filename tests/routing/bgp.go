@@ -10,6 +10,19 @@ import (
 	"github.com/fluidstackio/go-anta/pkg/test"
 )
 
+// decodeOutput decodes an already-JSON-decoded eAPI Output (a
+// map[string]interface{} produced by pkg/device) into the typed dst by
+// re-marshaling and unmarshaling. Tests that need a typed struct view of
+// the device response should use this rather than asserting Output to a
+// string — Output is never a string.
+func decodeOutput(out interface{}, dst interface{}) error {
+	b, err := json.Marshal(out)
+	if err != nil {
+		return fmt.Errorf("re-marshal output: %w", err)
+	}
+	return json.Unmarshal(b, dst)
+}
+
 // VerifyBGPPeers verifies the session state and configuration of BGP peers.
 //
 // This test performs the following checks for each specified peer:
@@ -1429,14 +1442,7 @@ func (t *VerifyBGPPeerASNCap) Execute(ctx context.Context, dev device.Device) (*
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				Capabilities struct {
@@ -1449,7 +1455,7 @@ func (t *VerifyBGPPeerASNCap) Execute(ctx context.Context, dev device.Device) (*
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -1572,14 +1578,7 @@ func (t *VerifyBGPPeerRouteRefreshCap) Execute(ctx context.Context, dev device.D
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				Capabilities struct {
@@ -1592,7 +1591,7 @@ func (t *VerifyBGPPeerRouteRefreshCap) Execute(ctx context.Context, dev device.D
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -1715,14 +1714,7 @@ func (t *VerifyBGPPeerMD5Auth) Execute(ctx context.Context, dev device.Device) (
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				TcpMD5Auth bool `json:"tcpMd5AuthEnabled"`
@@ -1730,7 +1722,7 @@ func (t *VerifyBGPPeerMD5Auth) Execute(ctx context.Context, dev device.Device) (
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -2071,14 +2063,7 @@ func (t *VerifyBGPTimers) Execute(ctx context.Context, dev device.Device) (*test
 		} `json:"vrfs"`
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -2539,14 +2524,7 @@ func (t *VerifyBgpRouteMaps) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PolicyInbound  string `json:"policyInbound"`
@@ -2555,7 +2533,7 @@ func (t *VerifyBgpRouteMaps) Execute(ctx context.Context, dev device.Device) (*t
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -2711,14 +2689,7 @@ func (t *VerifyBGPPeerRouteLimit) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				MaxPrefixesLimit   int `json:"maxPrefixesLimit"`
@@ -2727,7 +2698,7 @@ func (t *VerifyBGPPeerRouteLimit) Execute(ctx context.Context, dev device.Device
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -2877,14 +2848,7 @@ func (t *VerifyBGPPeerGroup) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PeerGroup string `json:"peerGroup"`
@@ -2892,7 +2856,7 @@ func (t *VerifyBGPPeerGroup) Execute(ctx context.Context, dev device.Device) (*t
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -3019,14 +2983,7 @@ func (t *VerifyBGPPeerSessionRibd) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				SessionState string `json:"sessionState"`
@@ -3034,7 +2991,7 @@ func (t *VerifyBGPPeerSessionRibd) Execute(ctx context.Context, dev device.Devic
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP RIBD neighbors output: %v", err)
 		return result, nil
@@ -3159,14 +3116,7 @@ func (t *VerifyBGPPeersHealthRibd) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			AddressFamilies map[string]struct {
 				Neighbors map[string]struct {
@@ -3176,7 +3126,7 @@ func (t *VerifyBGPPeersHealthRibd) Execute(ctx context.Context, dev device.Devic
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP RIBD summary output: %v", err)
 		return result, nil
@@ -3307,14 +3257,7 @@ func (t *VerifyBGPNlriAcceptance) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PrefixesReceived int `json:"prefixesReceived"`
@@ -3323,7 +3266,7 @@ func (t *VerifyBGPNlriAcceptance) Execute(ctx context.Context, dev device.Device
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -3439,18 +3382,11 @@ func (t *VerifyBGPRoutePaths) Execute(ctx context.Context, dev device.Device) (*
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		Routes map[string]any `json:"routes"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP routes output: %v", err)
 		return result, nil
@@ -3544,20 +3480,13 @@ func (t *VerifyBGPRouteECMP) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		Routes map[string]struct {
 			NextHops []any `json:"nextHops"`
 		} `json:"routes"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP route details: %v", err)
 		return result, nil
@@ -3656,20 +3585,13 @@ func (t *VerifyBGPRedistribution) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		Routes map[string]struct {
 			RouteType string `json:"routeType"`
 		} `json:"routes"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP routes: %v", err)
 		return result, nil
@@ -3778,14 +3700,7 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 		return result, nil
 	}
 
-	outputStr, ok := cmdResult.Output.(string)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "Failed to convert command output to string"
-		return result, nil
-	}
-
-	var response struct {
+var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				EbgpMultihop int `json:"ebgpMultihop"`
@@ -3793,7 +3708,7 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 		} `json:"vrfs"`
 	}
 
-	if err := json.Unmarshal([]byte(outputStr), &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
