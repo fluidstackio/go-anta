@@ -153,6 +153,12 @@ func (t *VerifySSHIPv4Acl) Execute(ctx context.Context, dev device.Device) (*tes
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected ACL output: %v", err)
+		return result, nil
+	}
+
 	aclCount := 0
 	if aclData, ok := cmdResult.Output.(map[string]any); ok {
 		if vrfs, ok := aclData["vrfs"].(map[string]any); ok {
@@ -249,6 +255,12 @@ func (t *VerifySSHIPv6Acl) Execute(ctx context.Context, dev device.Device) (*tes
 	if err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to get SSH IPv6 ACL summary: %v", err)
+		return result, nil
+	}
+
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected ACL output: %v", err)
 		return result, nil
 	}
 
@@ -585,6 +597,12 @@ func (t *VerifyAPIIPv4Acl) Execute(ctx context.Context, dev device.Device) (*tes
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected ACL output: %v", err)
+		return result, nil
+	}
+
 	aclCount := 0
 	if aclData, ok := cmdResult.Output.(map[string]any); ok {
 		if vrfs, ok := aclData["vrfs"].(map[string]any); ok {
@@ -681,6 +699,12 @@ func (t *VerifyAPIIPv6Acl) Execute(ctx context.Context, dev device.Device) (*tes
 	if err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to get API IPv6 ACL summary: %v", err)
+		return result, nil
+	}
+
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected ACL output: %v", err)
 		return result, nil
 	}
 
