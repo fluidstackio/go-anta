@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -11,6 +12,10 @@ import (
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"gopkg.in/yaml.v3"
 )
+
+// maxRangeSize caps the number of devices an IP range can expand to,
+// preventing runaway memory growth from misconfigured or reversed ranges.
+const maxRangeSize = 65536
 
 type Inventory struct {
 	Devices  []device.DeviceConfig `yaml:"devices" json:"devices"`
@@ -127,7 +132,31 @@ func (i *Inventory) expandRanges() error {
 			return fmt.Errorf("invalid end IP: %s", rangeDef.End)
 		}
 
-		for ip := startIP; !ip.Equal(endIP); inc(ip) {
+		// Normalize to 16-byte form so IPv4 and IPv6 compare/iterate consistently.
+		start16 := startIP.To16()
+		end16 := endIP.To16()
+		if start16 == nil || end16 == nil {
+			return fmt.Errorf("could not normalize range %s-%s", rangeDef.Start, rangeDef.End)
+		}
+
+		// Reject cross-family ranges (one IPv4, one IPv6) — iterating across them
+		// would never terminate via Equal().
+		if (startIP.To4() == nil) != (endIP.To4() == nil) {
+			return fmt.Errorf("range %s-%s mixes IPv4 and IPv6", rangeDef.Start, rangeDef.End)
+		}
+
+		// Reject reversed ranges; otherwise inc() would walk forward forever.
+		if bytes.Compare(start16, end16) > 0 {
+			return fmt.Errorf("range start %s is greater than end %s", rangeDef.Start, rangeDef.End)
+		}
+
+		ip := make(net.IP, len(start16))
+		copy(ip, start16)
+		count := 0
+		for ; !ip.Equal(end16); inc(ip) {
+			if count >= maxRangeSize {
+				return fmt.Errorf("range %s-%s exceeds maximum size %d", rangeDef.Start, rangeDef.End, maxRangeSize)
+			}
 			dev := device.DeviceConfig{
 				Name:           ip.String(),
 				Host:           ip.String(),
@@ -139,8 +168,9 @@ func (i *Inventory) expandRanges() error {
 				Insecure:       rangeDef.Insecure,
 			}
 			i.Devices = append(i.Devices, dev)
+			count++
 		}
-		
+
 		dev := device.DeviceConfig{
 			Name:           endIP.String(),
 			Host:           endIP.String(),
