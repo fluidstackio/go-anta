@@ -73,23 +73,31 @@ func (t *VerifyMlagStatus) Execute(ctx context.Context, dev device.Device) (*tes
 		return result, nil
 	}
 
-	var mlagInfo MlagInfo
-	if data, ok := cmdResult.Output.(map[string]any); ok {
-		if state, ok := data["state"].(string); ok {
-			mlagInfo.State = state
-		}
-		if negStatus, ok := data["negotiationStatus"].(string); ok {
-			mlagInfo.NegotiationStatus = negStatus
-		}
-		if localIntfStatus, ok := data["localIntfStatus"].(string); ok {
-			mlagInfo.LocalIntfStatus = localIntfStatus
-		}
-		if peerLinkStatus, ok := data["peerLinkStatus"].(string); ok {
-			mlagInfo.PeerLinkStatus = peerLinkStatus
-		}
+	data, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected MLAG output: %v", err)
+		return result, nil
 	}
 
-	// Check if MLAG is disabled
+	var mlagInfo MlagInfo
+	if state, ok := data["state"].(string); ok {
+		mlagInfo.State = state
+	}
+	if negStatus, ok := data["negotiationStatus"].(string); ok {
+		mlagInfo.NegotiationStatus = negStatus
+	}
+	if localIntfStatus, ok := data["localIntfStatus"].(string); ok {
+		mlagInfo.LocalIntfStatus = localIntfStatus
+	}
+	if peerLinkStatus, ok := data["peerLinkStatus"].(string); ok {
+		mlagInfo.PeerLinkStatus = peerLinkStatus
+	}
+
+	// Check if MLAG is disabled. An empty State field could mean either
+	// "MLAG genuinely disabled" or "device returned an object with no state
+	// key" — but we've already verified the top-level shape via AsMap, so
+	// a missing state field is a real "disabled" signal from EOS.
 	if strings.EqualFold(mlagInfo.State, "disabled") || mlagInfo.State == "" {
 		result.Status = test.TestSkipped
 		result.Message = "MLAG is disabled"
