@@ -356,9 +356,6 @@ func (d *EOSDevice) sendRequest(ctx context.Context, payload interface{}) ([]byt
 		return nil, err
 	}
 	logger.Debugf("JSON payload marshaled for %s, size: %d bytes", d.Config.Name, len(jsonData))
-	
-	// Dump the JSON payload for debugging
-	logger.Infof("JSON Request for %s:\n%s", d.Config.Name, string(jsonData))
 
 	url := fmt.Sprintf("https://%s:%d/command-api", d.Config.Host, d.Config.Port)
 	logger.Debugf("Creating HTTP request for %s to %s", d.Config.Name, url)
@@ -371,12 +368,7 @@ func (d *EOSDevice) sendRequest(ctx context.Context, payload interface{}) ([]byt
 	req.SetBasicAuth(d.Config.Username, d.Config.Password)
 
 	logger.Debugf("Making HTTP request to %s with username: %s", url, d.Config.Username)
-	
-	// Generate curl command for manual testing
-	curlCmd := fmt.Sprintf("curl -k -X POST %s -H \"Content-Type: application/json\" -u \"%s:%s\" -d '%s'", 
-		url, d.Config.Username, d.Config.Password, string(jsonData))
-	logger.Infof("Equivalent curl command:\n%s", curlCmd)
-	
+
 	// Create a shorter timeout context for the HTTP request
 	httpCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
