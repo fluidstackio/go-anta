@@ -219,7 +219,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	if !ignoreStatus {
 		for _, result := range results {
 			if result.Status == test.TestFailure || result.Status == test.TestError {
-				os.Exit(1)
+				return ErrTestsFailed
 			}
 		}
 	}
