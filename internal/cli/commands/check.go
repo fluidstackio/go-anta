@@ -21,6 +21,7 @@ var (
 	checkLimit          string
 	checkDeviceUsername string
 	checkDevicePassword string
+	checkTransport      string
 )
 
 var CheckCmd = &cobra.Command{
@@ -41,11 +42,21 @@ func init() {
 	CheckCmd.Flags().StringVar(&checkDeviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	CheckCmd.Flags().StringVar(&checkDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
 	CheckCmd.Flags().BoolVar(&checkNoConnect, "no-connect", false, "only show inventory without connecting to devices")
+	CheckCmd.Flags().StringVar(&checkTransport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Validate the transport override early so a bad value produces a
+	// clear error instead of silently failing every device-construct
+	// call inside the connect loop.
+	switch checkTransport {
+	case "", "eapi", "gnmi":
+	default:
+		return fmt.Errorf("unknown --transport value %q (supported: eapi, gnmi)", checkTransport)
+	}
 
 	var inv *inventory.Inventory
 	var err error
@@ -94,7 +105,15 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	failCount := 0
 
 	for _, devConfig := range inv.Devices {
-		dev := device.NewEOSDevice(devConfig)
+		if checkTransport != "" {
+			devConfig.Transport = checkTransport
+		}
+		dev, err := device.New(devConfig)
+		if err != nil {
+			fmt.Printf("  %s: failed to construct device: %v\n", devConfig.Name, err)
+			failCount++
+			continue
+		}
 
 		fmt.Printf("Checking %s (%s)... ", devConfig.Name, devConfig.Host)
 
