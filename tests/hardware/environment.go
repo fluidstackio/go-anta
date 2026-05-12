@@ -183,33 +183,38 @@ func (t *VerifyEnvironmentCooling) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
+	coolingData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected cooling output: %v", err)
+		return result, nil
+	}
+
 	fanIssues := []string{}
 
-	if coolingData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check power supply fans
-		if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
-			for psName, psData := range powerSupplies {
-				if ps, ok := psData.(map[string]any); ok {
-					t.checkPowerSupplyFans(psName, ps, &fanIssues)
-				}
+	// Check power supply fans
+	if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
+		for psName, psData := range powerSupplies {
+			if ps, ok := psData.(map[string]any); ok {
+				t.checkPowerSupplyFans(psName, ps, &fanIssues)
 			}
 		}
+	}
 
-		// Check fan trays
-		if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
-			for fanTrayName, fanTrayData := range fanTrays {
-				if fanTray, ok := fanTrayData.(map[string]any); ok {
-					t.checkFanTray(fanTrayName, fanTray, &fanIssues)
-				}
+	// Check fan trays
+	if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
+		for fanTrayName, fanTrayData := range fanTrays {
+			if fanTray, ok := fanTrayData.(map[string]any); ok {
+				t.checkFanTray(fanTrayName, fanTray, &fanIssues)
 			}
 		}
+	}
 
-		// Check individual fans
-		if fans, ok := coolingData["fans"].(map[string]any); ok {
-			for fanName, fanData := range fans {
-				if fan, ok := fanData.(map[string]any); ok {
-					t.checkIndividualFan(fanName, fan, &fanIssues)
-				}
+	// Check individual fans
+	if fans, ok := coolingData["fans"].(map[string]any); ok {
+		for fanName, fanData := range fans {
+			if fan, ok := fanData.(map[string]any); ok {
+				t.checkIndividualFan(fanName, fan, &fanIssues)
 			}
 		}
 	}
@@ -362,20 +367,25 @@ func (t *VerifyEnvironmentPower) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	powerData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected power output: %v", err)
+		return result, nil
+	}
+
 	powerIssues := []string{}
 
-	if powerData, ok := cmdResult.Output.(map[string]any); ok {
-		if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
-			for psName, psData := range powerSupplies {
-				if ps, ok := psData.(map[string]any); ok {
-					t.checkPowerSupply(psName, ps, &powerIssues)
-				}
+	if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
+		for psName, psData := range powerSupplies {
+			if ps, ok := psData.(map[string]any); ok {
+				t.checkPowerSupply(psName, ps, &powerIssues)
 			}
-		} else if powerSupplySlots, ok := powerData["powerSupplySlots"].(map[string]any); ok {
-			for psName, psData := range powerSupplySlots {
-				if ps, ok := psData.(map[string]any); ok {
-					t.checkPowerSupply(psName, ps, &powerIssues)
-				}
+		}
+	} else if powerSupplySlots, ok := powerData["powerSupplySlots"].(map[string]any); ok {
+		for psName, psData := range powerSupplySlots {
+			if ps, ok := psData.(map[string]any); ok {
+				t.checkPowerSupply(psName, ps, &powerIssues)
 			}
 		}
 	}

@@ -98,27 +98,32 @@ func (t *VerifyAdverseDrops) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
+	dropData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected adverse-drop output: %v", err)
+		return result, nil
+	}
+
 	dropIssues := []string{}
 
-	if dropData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check interface drops
-		if t.CheckInterfaces {
-			if interfaces, ok := dropData["interfaces"].(map[string]any); ok {
-				for intfName, intfData := range interfaces {
-					if intf, ok := intfData.(map[string]any); ok {
-						t.checkInterfaceDrops(intfName, intf, &dropIssues)
-					}
+	// Check interface drops
+	if t.CheckInterfaces {
+		if interfaces, ok := dropData["interfaces"].(map[string]any); ok {
+			for intfName, intfData := range interfaces {
+				if intf, ok := intfData.(map[string]any); ok {
+					t.checkInterfaceDrops(intfName, intf, &dropIssues)
 				}
 			}
 		}
+	}
 
-		// Check forwarding engine drops
-		if t.CheckForwardingEngines {
-			if forwardingEngines, ok := dropData["forwardingEngines"].(map[string]any); ok {
-				for feName, feData := range forwardingEngines {
-					if fe, ok := feData.(map[string]any); ok {
-						t.checkForwardingEngineDrops(feName, fe, &dropIssues)
-					}
+	// Check forwarding engine drops
+	if t.CheckForwardingEngines {
+		if forwardingEngines, ok := dropData["forwardingEngines"].(map[string]any); ok {
+			for feName, feData := range forwardingEngines {
+				if fe, ok := feData.(map[string]any); ok {
+					t.checkForwardingEngineDrops(feName, fe, &dropIssues)
 				}
 			}
 		}
@@ -389,14 +394,19 @@ func (t *VerifyPCIeErrors) Execute(ctx context.Context, dev device.Device) (*tes
 		return result, nil
 	}
 
+	pcieData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected PCIe error output: %v", err)
+		return result, nil
+	}
+
 	pcieIssues := []string{}
 
-	if pcieData, ok := cmdResult.Output.(map[string]any); ok {
-		if devices, ok := pcieData["pcieDevices"].(map[string]any); ok {
-			for deviceName, deviceData := range devices {
-				if device, ok := deviceData.(map[string]any); ok {
-					t.checkPCIeDeviceErrors(deviceName, device, &pcieIssues)
-				}
+	if devices, ok := pcieData["pcieDevices"].(map[string]any); ok {
+		for deviceName, deviceData := range devices {
+			if device, ok := deviceData.(map[string]any); ok {
+				t.checkPCIeDeviceErrors(deviceName, device, &pcieIssues)
 			}
 		}
 	}
@@ -528,33 +538,38 @@ func (t *VerifyAbsenceOfLinecards) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
+	inventoryData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected inventory output: %v", err)
+		return result, nil
+	}
+
 	foundLinecards := []string{}
 
-	if inventoryData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check linecards in xcvrSlots (transceiver slots often indicate linecards)
-		if xcvrSlots, ok := inventoryData["xcvrSlots"].(map[string]any); ok {
-			for slotName, slotData := range xcvrSlots {
-				if slot, ok := slotData.(map[string]any); ok {
-					t.checkSlotForLinecards(slotName, slot, &foundLinecards)
-				}
+	// Check linecards in xcvrSlots (transceiver slots often indicate linecards)
+	if xcvrSlots, ok := inventoryData["xcvrSlots"].(map[string]any); ok {
+		for slotName, slotData := range xcvrSlots {
+			if slot, ok := slotData.(map[string]any); ok {
+				t.checkSlotForLinecards(slotName, slot, &foundLinecards)
 			}
 		}
+	}
 
-		// Check hardware components
-		if components, ok := inventoryData["hardwareRevision"].(map[string]any); ok {
-			for componentName, componentData := range components {
-				if component, ok := componentData.(map[string]any); ok {
-					t.checkComponentForLinecards(componentName, component, &foundLinecards)
-				}
+	// Check hardware components
+	if components, ok := inventoryData["hardwareRevision"].(map[string]any); ok {
+		for componentName, componentData := range components {
+			if component, ok := componentData.(map[string]any); ok {
+				t.checkComponentForLinecards(componentName, component, &foundLinecards)
 			}
 		}
+	}
 
-		// Check cards directly
-		if cards, ok := inventoryData["cards"].(map[string]any); ok {
-			for cardName, cardData := range cards {
-				if card, ok := cardData.(map[string]any); ok {
-					t.checkCardForLinecards(cardName, card, &foundLinecards)
-				}
+	// Check cards directly
+	if cards, ok := inventoryData["cards"].(map[string]any); ok {
+		for cardName, cardData := range cards {
+			if card, ok := cardData.(map[string]any); ok {
+				t.checkCardForLinecards(cardName, card, &foundLinecards)
 			}
 		}
 	}

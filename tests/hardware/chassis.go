@@ -90,9 +90,13 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 		result.Message = fmt.Sprintf("Failed to get cooling data: %v", err)
 		return result, nil
 	}
-	if coolingData, ok := coolingResult.Output.(map[string]any); ok {
-		t.checkCoolingHealth(coolingData, &healthIssues)
+	coolingData, err := test.AsMap(coolingResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected cooling output: %v", err)
+		return result, nil
 	}
+	t.checkCoolingHealth(coolingData, &healthIssues)
 
 	// Check power supplies
 	powerCmd := device.Command{
@@ -106,9 +110,13 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 		result.Message = fmt.Sprintf("Failed to get power data: %v", err)
 		return result, nil
 	}
-	if powerData, ok := powerResult.Output.(map[string]any); ok {
-		t.checkPowerHealth(powerData, &healthIssues)
+	powerData, err := test.AsMap(powerResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected power output: %v", err)
+		return result, nil
 	}
+	t.checkPowerHealth(powerData, &healthIssues)
 
 	// Check temperature sensors
 	tempCmd := device.Command{
@@ -122,9 +130,13 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 		result.Message = fmt.Sprintf("Failed to get temperature data: %v", err)
 		return result, nil
 	}
-	if tempData, ok := tempResult.Output.(map[string]any); ok {
-		t.checkTemperatureHealth(tempData, &healthIssues)
+	tempData, err := test.AsMap(tempResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected temperature output: %v", err)
+		return result, nil
 	}
+	t.checkTemperatureHealth(tempData, &healthIssues)
 
 	if len(healthIssues) > 0 {
 		result.Status = test.TestFailure
