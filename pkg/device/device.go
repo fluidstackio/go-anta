@@ -2,6 +2,7 @@ package device
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -84,6 +85,12 @@ type BaseDevice struct {
 	Model          string
 	LastRefresh    time.Time
 	ConnectionTime time.Time
+
+	// mu protects State, Model, LastRefresh, and ConnectionTime against
+	// concurrent reads (from accessor methods and Execute) and writes
+	// (from Connect/Disconnect/Refresh). Config and its sub-fields are
+	// immutable after construction and don't require the lock.
+	mu sync.RWMutex
 }
 
 func (d *BaseDevice) Name() string {
@@ -99,13 +106,19 @@ func (d *BaseDevice) Tags() []string {
 }
 
 func (d *BaseDevice) IsOnline() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.State == ConnectionStateConnected || d.State == ConnectionStateEstablished
 }
 
 func (d *BaseDevice) IsEstablished() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.State == ConnectionStateEstablished
 }
 
 func (d *BaseDevice) HardwareModel() string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return d.Model
 }

@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
-	
+
 	"github.com/fluidstackio/go-anta/internal/logger"
 )
 
@@ -18,7 +17,6 @@ type EOSDevice struct {
 	BaseDevice
 	client    *http.Client
 	cache     *CommandCache
-	mu        sync.RWMutex
 	requestID int
 }
 
