@@ -100,7 +100,22 @@ The probe mirrors `EOSDevice.Connect` so semantics around `IsEstablished()` stay
   - `""` or `"json"` → `JSON_IETF`
   - `"text"` → `ASCII`
 
-The response `Notification.Update[].Val` is a `TypedValue`. For `JSON_IETF` it carries JSON bytes; we `json.Unmarshal` into `map[string]interface{}` and assign to `CommandResult.Output`. For `ASCII` we assign the raw string. Either way, the existing `Output interface{}` contract is preserved — tests that do `cmdResult.Output.(map[string]any)` continue to work.
+The response `Notification.Update[].Val` is a `TypedValue`. For `JSON_IETF` it carries JSON bytes; we `json.Unmarshal` into `map[string]interface{}` and assign to `CommandResult.Output`. For `ASCII` we assign the raw string.
+
+**Wrapper-stripping (validated by spike on 2026-05-12):** Arista's gNMI server returns JSON_IETF bytes wrapped under a single key matching the CLI command string, e.g. `{"show version": {"modelName": "...", ...}}`. The eAPI client already extracts the equivalent inner object (`result[0]`) before assigning to `Output`. To keep the two transports' `Output` shapes identical, `GNMIDevice.Execute` strips this one extra level:
+
+```go
+var raw map[string]interface{}
+_ = json.Unmarshal(jsonIetfVal, &raw)
+if len(raw) == 1 {
+    if inner, ok := raw[d.expandTemplate(cmd)].(map[string]interface{}); ok {
+        raw = inner
+    }
+}
+result.Output = raw
+```
+
+After this strip, every test impl in `tests/...` that walks `cmdResult.Output.(map[string]any)["vrfs"][...]` etc. works without modification.
 
 `cmd.Params` template-expansion is handled by the existing `expandTemplate` helper. `cmd.Version` and `cmd.Revision` are not meaningful on the gNMI CLI path; ignored with no error.
 
@@ -138,7 +153,10 @@ The following are intentionally deferred. Each is small enough to be its own fol
 
 ## Risks
 
-- **Arista's `origin=cli` JSON encoding behavior is the assumption that makes this work cheaply.** If Arista returns different JSON for some commands via gNMI than via eAPI, tests will mis-parse. Mitigation: integration-test a handful of representative commands before claiming the transport is production-ready.
+- **JSON shape parity (largely retired by 2026-05-12 spike).** A live test against an EOS 4.34.4M device showed that `origin=cli` with `JSON_IETF` encoding returns the same EOS-native JSON shape as eAPI (inside a single-key wrapper which the transport strips — see Execute above). Field names, nesting, and value types matched for `show version` and `show ip bgp summary`. Two open questions remain to fully retire this risk:
+  1. **Large ASN encoding.** The spike showed `"asn": "4204100000"` as a JSON **string** in gNMI output. eAPI may quote this differently (TBD; run the equivalent eAPI curl to compare). If they differ, tests that read `peerInfo["asn"].(float64)` would fail on the gNMI transport. Mitigation if observed: a small normalizer that re-types numeric-looking strings, applied per-command or globally.
+  2. **Commands without JSON representation.** A handful of EOS commands have no `| json` form; those return ASCII even when JSON is requested. Currently no in-scope test depends on such commands, but the transport should gracefully degrade (return the ASCII string in `Output`) rather than error.
+- **IPv6 link-local zone-index limitation.** gnmic does not correctly handle IPv6 link-local addresses with a zone identifier (`fe80::1%eth0`) due to URL re-encoding; tracked upstream as [openconfig/gnmic#796](https://github.com/openconfig/gnmic/issues/796). Standard global/site-local IPv6 (e.g. `fc00:800f:f01::8`) works fine. Datacenter fabric use is unaffected.
 - **gnmic dependency tree is large** (the user picked the higher-level wrapper over the bare openconfig/gnmi client). Adds a few hundred KB of transitive deps. Acceptable trade-off for the cleaner API; revisit if go.mod gets unwieldy.
 - **Connection pooling differences.** gRPC uses a single multiplexed HTTP/2 connection per `ClientConn`, naturally pooling requests. Different model from the per-device `http.Transport` pool of the eAPI client, but functionally similar from the caller's view.
 
