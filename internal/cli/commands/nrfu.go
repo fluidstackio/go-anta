@@ -65,7 +65,7 @@ func init() {
 	NrfuCmd.Flags().StringVar(&limit, "limit", "", "limit devices: hostname, comma-separated list (host1,host2), index (0), range (0-2), or wildcard (leaf*)")
 	NrfuCmd.Flags().StringVar(&deviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	NrfuCmd.Flags().StringVar(&devicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
-	NrfuCmd.Flags().StringVar(&transport, "transport", "", "transport for device connections (eapi, gnmi). Overrides per-device YAML transport when set.")
+	NrfuCmd.Flags().StringVar(&transport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
 	NrfuCmd.Flags().IntVarP(&concurrency, "concurrency", "j", 10, "maximum concurrent connections")
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
 	NrfuCmd.Flags().BoolVar(&ignoreStatus, "ignore-status", false, "always return exit code 0")
@@ -84,6 +84,15 @@ func init() {
 func runNrfu(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Validate the transport override early so a bad value produces a
+	// clear error instead of silently failing every device-construct
+	// call inside the connect loop.
+	switch transport {
+	case "", "eapi", "gnmi":
+	default:
+		return fmt.Errorf("unknown --transport value %q (supported: eapi, gnmi)", transport)
+	}
 
 	// Configure logging based on flags IMMEDIATELY before any other operations
 	configureLogging()
