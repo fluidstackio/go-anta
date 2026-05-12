@@ -106,6 +106,12 @@ func (t *VerifyInterfacesStatus) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected interface status output: %v", err)
+		return result, nil
+	}
+
 	deviceInterfaces := make(map[string]InterfaceInfo)
 
 	if intfData, ok := cmdResult.Output.(map[string]any); ok {

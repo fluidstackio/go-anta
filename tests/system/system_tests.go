@@ -357,6 +357,12 @@ func (t *VerifyNTP) Execute(ctx context.Context, dev device.Device) (*test.TestR
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected NTP associations output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 	ntpServers := make(map[string]NTPAssociation)
 
@@ -517,6 +523,12 @@ func (t *VerifyDNSResolution) Execute(ctx context.Context, dev device.Device) (*
 		if err != nil {
 			result.Status = test.TestError
 			result.Message = fmt.Sprintf("Failed to get DNS servers: %v", err)
+			return result, nil
+		}
+
+		if _, err := test.AsMap(cmdResult.Output); err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected DNS servers output: %v", err)
 			return result, nil
 		}
 
@@ -1174,6 +1186,12 @@ func (t *VerifyFileSystemUtilization) Execute(ctx context.Context, dev device.De
 	}
 
 	const maxUtilization = 75.0
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected disk output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
 	if diskData, ok := cmdResult.Output.(map[string]any); ok {
@@ -1312,6 +1330,12 @@ func (t *VerifyFlashUtilization) Execute(ctx context.Context, dev device.Device)
 	if err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to get flash disk usage: %v", err)
+		return result, nil
+	}
+
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected disk output: %v", err)
 		return result, nil
 	}
 

@@ -121,6 +121,12 @@ func (t *VerifyInterfaceErrors) Execute(ctx context.Context, dev device.Device) 
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected error counter output: %v", err)
+		return result, nil
+	}
+
 	deviceErrors := make(map[string]InterfaceErrorCounters)
 
 	if errorData, ok := cmdResult.Output.(map[string]any); ok {

@@ -124,6 +124,17 @@ func (t *VerifyInterfaceUtilization) Execute(ctx context.Context, dev device.Dev
 		return result, nil
 	}
 
+	if _, err := test.AsMap(ratesResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected counter rates output: %v", err)
+		return result, nil
+	}
+	if _, err := test.AsMap(statusResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected interface status output: %v", err)
+		return result, nil
+	}
+
 	// Parse interface rates
 	interfaceRates := make(map[string]InterfaceRates)
 	if ratesData, ok := ratesResult.Output.(map[string]any); ok {
