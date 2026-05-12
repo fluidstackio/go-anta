@@ -3,8 +3,10 @@ package device
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	gnmipb "github.com/openconfig/gnmi/proto/gnmi"
 	gnmiapi "github.com/openconfig/gnmic/pkg/api"
 	gnmitarget "github.com/openconfig/gnmic/pkg/api/target"
 
@@ -103,18 +105,136 @@ func (d *GNMIDevice) Disconnect() error {
 	return nil
 }
 
-// Execute, ExecuteBatch, and Refresh return explicit errors until Tasks 5
-// and 6 implement them. Returning an error makes accidental use during
-// development obvious.
-
 func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, error) {
-	return nil, fmt.Errorf("GNMIDevice.Execute not yet implemented")
+	d.mu.RLock()
+	if d.State != ConnectionStateEstablished {
+		d.mu.RUnlock()
+		return nil, fmt.Errorf("device %s is not connected", d.Config.Name)
+	}
+	target := d.target
+	d.mu.RUnlock()
+
+	if target == nil {
+		return nil, fmt.Errorf("device %s has no active gNMI target", d.Config.Name)
+	}
+
+	if cmd.UseCache && d.cache != nil {
+		if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
+			cached.Cached = true
+			return cached, nil
+		}
+	}
+
+	start := time.Now()
+	expanded := d.expandTemplate(cmd)
+
+	encoding := "json_ietf"
+	if cmd.Format == "text" {
+		encoding = "ascii"
+	}
+
+	req, err := gnmiapi.NewGetRequest(
+		gnmiapi.Path(fmt.Sprintf("cli:/%s", expanded)),
+		gnmiapi.Encoding(encoding),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build gNMI Get for %q: %w", expanded, err)
+	}
+
+	resp, err := target.Get(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("gNMI Get for %q: %w", expanded, err)
+	}
+
+	output, err := extractCLIOutput(resp, expanded, encoding)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &CommandResult{
+		Command:   cmd,
+		Output:    output,
+		Duration:  time.Since(start),
+		Timestamp: time.Now(),
+	}
+
+	if cmd.UseCache && d.cache != nil {
+		d.cache.Set(d.cacheKey(cmd), result)
+	}
+	return result, nil
 }
 
+// extractCLIOutput pulls the first Update value out of a gNMI GetResponse
+// and converts it to a shape compatible with EOSDevice.Execute's Output:
+//
+//   - JSON_IETF -> map[string]interface{} with the command-name wrapper
+//     stripped via unwrapCLIResponse.
+//   - ASCII     -> string of the raw CLI output.
+//
+// JSON-less commands that still return ASCII even when JSON was requested
+// fall back to the ASCII value rather than erroring.
+func extractCLIOutput(resp *gnmipb.GetResponse, expanded, encoding string) (interface{}, error) {
+	if resp == nil || len(resp.Notification) == 0 || len(resp.Notification[0].Update) == 0 {
+		return nil, fmt.Errorf("gNMI Get for %q returned no notifications", expanded)
+	}
+	val := resp.Notification[0].Update[0].Val
+	if val == nil {
+		return nil, fmt.Errorf("gNMI Get for %q returned nil TypedValue", expanded)
+	}
+	return extractTypedValue(val, expanded, encoding)
+}
+
+// extractTypedValue is the value-only extractor reused by both Execute
+// (single-path) and ExecuteBatch (multi-path) once Task 6 lands.
+func extractTypedValue(val *gnmipb.TypedValue, expanded, encoding string) (interface{}, error) {
+	switch encoding {
+	case "ascii":
+		if s := val.GetAsciiVal(); s != "" {
+			return s, nil
+		}
+		return "", nil
+	case "json_ietf":
+		raw := val.GetJsonIetfVal()
+		if len(raw) == 0 {
+			// Some commands without a JSON form may still return ASCII;
+			// surface that gracefully rather than failing.
+			if s := val.GetAsciiVal(); s != "" {
+				return s, nil
+			}
+			return nil, fmt.Errorf("gNMI returned empty JSON_IETF value for %q", expanded)
+		}
+		return unwrapCLIResponse(raw, expanded)
+	default:
+		return nil, fmt.Errorf("unsupported encoding %q", encoding)
+	}
+}
+
+// expandTemplate substitutes {key} placeholders in cmd.Template with
+// values from cmd.Params. Mirrors EOSDevice.expandTemplate so each
+// transport file stays self-contained.
+func (d *GNMIDevice) expandTemplate(cmd Command) string {
+	cmdStr := cmd.Template
+	for key, value := range cmd.Params {
+		placeholder := fmt.Sprintf("{%s}", key)
+		cmdStr = strings.ReplaceAll(cmdStr, placeholder, fmt.Sprint(value))
+	}
+	return cmdStr
+}
+
+// cacheKey builds the per-device cache key including all fields that
+// affect the response (template, params via expansion, version, revision,
+// format). Same shape as EOSDevice.cacheKey.
+func (d *GNMIDevice) cacheKey(cmd Command) string {
+	return fmt.Sprintf("%s|v=%s|r=%d|f=%s", d.expandTemplate(cmd), cmd.Version, cmd.Revision, cmd.Format)
+}
+
+// ExecuteBatch returns an explicit error until Task 6 implements it.
+// Returning an error makes accidental use during development obvious.
 func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*CommandResult, error) {
 	return nil, fmt.Errorf("GNMIDevice.ExecuteBatch not yet implemented")
 }
 
+// Refresh returns an explicit error until Task 6/7 implements it.
 func (d *GNMIDevice) Refresh(ctx context.Context) error {
 	return fmt.Errorf("GNMIDevice.Refresh not yet implemented")
 }
