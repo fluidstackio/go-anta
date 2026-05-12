@@ -139,7 +139,7 @@ func (d *EOSDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, e
 	d.mu.RUnlock()
 
 	if cmd.UseCache && d.cache != nil {
-		if cached := d.cache.Get(cmd.Template); cached != nil {
+		if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
 			cached.Cached = true
 			return cached, nil
 		}
@@ -151,7 +151,7 @@ func (d *EOSDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, e
 	}
 
 	if cmd.UseCache && d.cache != nil {
-		d.cache.Set(cmd.Template, result)
+		d.cache.Set(d.cacheKey(cmd), result)
 	}
 
 	return result, nil
@@ -170,7 +170,7 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 
 	for i, cmd := range cmds {
 		if cmd.UseCache && d.cache != nil {
-			if cached := d.cache.Get(cmd.Template); cached != nil {
+			if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
 				cached.Cached = true
 				results[i] = cached
 				continue
@@ -209,7 +209,7 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 			results[i] = result
 
 			if cmd.UseCache && d.cache != nil {
-				d.cache.Set(cmd.Template, result)
+				d.cache.Set(d.cacheKey(cmd), result)
 			}
 			batchIdx++
 		}
@@ -404,6 +404,15 @@ func (d *EOSDevice) expandTemplate(cmd Command) string {
 		cmdStr = strings.ReplaceAll(cmdStr, placeholder, fmt.Sprint(value))
 	}
 	return cmdStr
+}
+
+// cacheKey produces a cache key that distinguishes between commands that
+// share a Template but differ in Params, Version, Revision, or Format.
+// Keying on Template alone caused silent cross-test result reuse (e.g. two
+// "show ip bgp neighbors {neighbor}" calls with different params would
+// return each other's cached output).
+func (d *EOSDevice) cacheKey(cmd Command) string {
+	return fmt.Sprintf("%s|v=%s|r=%d|f=%s", d.expandTemplate(cmd), cmd.Version, cmd.Revision, cmd.Format)
 }
 
 func (d *EOSDevice) getRequestID() int {
