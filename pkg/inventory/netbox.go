@@ -281,8 +281,9 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 		allDevices = append(allDevices, nbResp.Results...)
 		logger.Debugf("Fetched %d devices from current page, total so far: %d", len(nbResp.Results), len(allDevices))
 		
-		// Check for next page
-		if nbResp.Next != "" && query.Limit == 0 {
+		// Follow pagination. query.Limit controls Netbox's per-page size, not
+		// a cap on total results, so we always follow Next until exhausted.
+		if nbResp.Next != "" {
 			apiURL = nbResp.Next
 		} else {
 			break
