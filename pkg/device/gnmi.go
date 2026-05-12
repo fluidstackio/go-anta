@@ -232,10 +232,135 @@ func (d *GNMIDevice) cacheKey(cmd Command) string {
 	return fmt.Sprintf("%s|v=%s|r=%d|f=%s", d.expandTemplate(cmd), cmd.Version, cmd.Revision, cmd.Format)
 }
 
-// ExecuteBatch returns an explicit error until Task 6 implements it.
-// Returning an error makes accidental use during development obvious.
+// ExecuteBatch issues gNMI Get requests for every command in cmds.
+//
+// One gNMI Get can carry multiple paths but only one encoding. If
+// callers mix json and text formats inside a batch we split into one
+// request per encoding. This mirrors the eAPI batch contract:
+//   - Cached results bypass the network entirely.
+//   - Each network-fetched result has Duration set (per-command share
+//     of the batch wall time for that encoding group).
+//   - If the response is shorter than expected (a prior command in the
+//     batch errored on the device), the slot is filled with a
+//     CommandResult whose Error is set — callers never see nil slots.
 func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*CommandResult, error) {
-	return nil, fmt.Errorf("GNMIDevice.ExecuteBatch not yet implemented")
+	d.mu.RLock()
+	if d.State != ConnectionStateEstablished {
+		d.mu.RUnlock()
+		return nil, fmt.Errorf("device %s is not connected", d.Config.Name)
+	}
+	target := d.target
+	d.mu.RUnlock()
+
+	if target == nil {
+		return nil, fmt.Errorf("device %s has no active gNMI target", d.Config.Name)
+	}
+
+	results := make([]*CommandResult, len(cmds))
+
+	// pending tracks commands that need to hit the wire, with their
+	// original index so we can map responses back into results in order.
+	type pending struct {
+		index    int
+		cmd      Command
+		expanded string
+		encoding string
+	}
+	var pendings []pending
+
+	for i, cmd := range cmds {
+		if cmd.UseCache && d.cache != nil {
+			if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
+				cached.Cached = true
+				results[i] = cached
+				continue
+			}
+		}
+		expanded := d.expandTemplate(cmd)
+		// Keep this encoding mapping in sync with Execute's.
+		encoding := "json_ietf"
+		if cmd.Format == "text" {
+			encoding = "ascii"
+		}
+		pendings = append(pendings, pending{
+			index:    i,
+			cmd:      cmd,
+			expanded: expanded,
+			encoding: encoding,
+		})
+	}
+
+	if len(pendings) == 0 {
+		return results, nil
+	}
+
+	// gNMI Get takes one encoding per request, but supports multiple
+	// paths. If callers mix json/text we split into one request per
+	// encoding.
+	byEncoding := map[string][]pending{}
+	for _, p := range pendings {
+		byEncoding[p.encoding] = append(byEncoding[p.encoding], p)
+	}
+
+	for encoding, group := range byEncoding {
+		opts := []gnmiapi.GNMIOption{gnmiapi.Encoding(encoding)}
+		for _, p := range group {
+			opts = append(opts, gnmiapi.Path(fmt.Sprintf("cli:/%s", p.expanded)))
+		}
+		req, err := gnmiapi.NewGetRequest(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("build gNMI batch Get (%s): %w", encoding, err)
+		}
+
+		start := time.Now()
+		resp, err := target.Get(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("device %s: gNMI batch Get (%s): %w", d.Config.Name, encoding, err)
+		}
+		perCmd := time.Since(start) / time.Duration(len(group))
+
+		// Response notifications are in the same order as requested
+		// paths (Arista behavior). Map back to input indexes.
+		for i, p := range group {
+			result := &CommandResult{
+				Command:   p.cmd,
+				Duration:  perCmd,
+				Timestamp: time.Now(),
+			}
+
+			if i >= len(resp.Notification) || len(resp.Notification[i].Update) == 0 {
+				// Short response: a prior command in the batch errored
+				// and stopped further processing. Fill the slot with an
+				// error rather than leaving it nil so callers don't
+				// nil-deref downstream.
+				result.Error = fmt.Errorf("gNMI batch returned no response for %q", p.expanded)
+				results[p.index] = result
+				continue
+			}
+
+			val := resp.Notification[i].Update[0].Val
+			if val == nil {
+				result.Error = fmt.Errorf("gNMI batch returned nil TypedValue for %q", p.expanded)
+				results[p.index] = result
+				continue
+			}
+
+			output, err := extractTypedValue(val, p.expanded, p.encoding)
+			if err != nil {
+				result.Error = fmt.Errorf("device %s: %w", d.Config.Name, err)
+				results[p.index] = result
+				continue
+			}
+			result.Output = output
+			results[p.index] = result
+
+			if p.cmd.UseCache && d.cache != nil {
+				d.cache.Set(d.cacheKey(p.cmd), result)
+			}
+		}
+	}
+
+	return results, nil
 }
 
 // Refresh returns an explicit error until Task 6/7 implements it.
