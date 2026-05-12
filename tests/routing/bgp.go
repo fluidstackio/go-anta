@@ -537,47 +537,63 @@ func (t *VerifyBGPPeerCount) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
+	bgpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected BGP summary output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if bgpData, ok := cmdResult.Output.(map[string]any); ok {
-		if vrfs, ok := bgpData["vrfs"].(map[string]any); ok {
-			for _, af := range t.AddressFamilies {
-				vrf := af.VRF
-				if vrf == "" {
-					vrf = "default"
-				}
+	vrfs, ok := bgpData["vrfs"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "BGP summary output missing 'vrfs' field"
+		return result, nil
+	}
 
-				if vrfData, exists := vrfs[vrf]; exists {
-					if vrfInfo, ok := vrfData.(map[string]any); ok {
-						if peers, ok := vrfInfo["peers"].(map[string]any); ok {
-							establishedCount := 0
-							totalCount := len(peers)
+	for _, af := range t.AddressFamilies {
+		vrf := af.VRF
+		if vrf == "" {
+			vrf = "default"
+		}
 
-							if af.CheckPeerState {
-								for _, peerData := range peers {
-									if peerInfo, ok := peerData.(map[string]any); ok {
-										if state, ok := peerInfo["peerState"].(string); ok {
-											if strings.EqualFold(state, "Established") {
-												establishedCount++
-											}
-										}
-									}
-								}
-								if establishedCount != af.NumPeers {
-									issues = append(issues, fmt.Sprintf("AFI %s SAFI %s VRF %s: expected %d established peers, got %d",
-										af.AFI, af.SAFI, vrf, af.NumPeers, establishedCount))
-								}
-							} else {
-								if totalCount != af.NumPeers {
-									issues = append(issues, fmt.Sprintf("AFI %s SAFI %s VRF %s: expected %d peers, got %d",
-										af.AFI, af.SAFI, vrf, af.NumPeers, totalCount))
-								}
-							}
+		vrfData, exists := vrfs[vrf]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+		vrfInfo, ok := vrfData.(map[string]any)
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VRF %s data malformed for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+
+		// A missing peers map means zero peers configured. Compare against
+		// expectation explicitly instead of silently skipping the check.
+		peers, _ := vrfInfo["peers"].(map[string]any)
+		totalCount := len(peers)
+
+		if af.CheckPeerState {
+			establishedCount := 0
+			for _, peerData := range peers {
+				if peerInfo, ok := peerData.(map[string]any); ok {
+					if state, ok := peerInfo["peerState"].(string); ok {
+						if strings.EqualFold(state, "Established") {
+							establishedCount++
 						}
 					}
-				} else {
-					issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
 				}
+			}
+			if establishedCount != af.NumPeers {
+				issues = append(issues, fmt.Sprintf("AFI %s SAFI %s VRF %s: expected %d established peers, got %d",
+					af.AFI, af.SAFI, vrf, af.NumPeers, establishedCount))
+			}
+		} else {
+			if totalCount != af.NumPeers {
+				issues = append(issues, fmt.Sprintf("AFI %s SAFI %s VRF %s: expected %d peers, got %d",
+					af.AFI, af.SAFI, vrf, af.NumPeers, totalCount))
 			}
 		}
 	}
@@ -860,40 +876,62 @@ func (t *VerifyBGPSpecificPeers) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	bgpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected BGP summary output: %v", err)
+		return result, nil
+	}
+
+	vrfs, ok := bgpData["vrfs"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "BGP summary output missing 'vrfs' field"
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if bgpData, ok := cmdResult.Output.(map[string]any); ok {
-		if vrfs, ok := bgpData["vrfs"].(map[string]any); ok {
-			for _, af := range t.AddressFamilies {
-				vrf := af.VRF
-				if vrf == "" {
-					vrf = "default"
-				}
+	for _, af := range t.AddressFamilies {
+		vrf := af.VRF
+		if vrf == "" {
+			vrf = "default"
+		}
 
-				if vrfData, exists := vrfs[vrf]; exists {
-					if vrfInfo, ok := vrfData.(map[string]any); ok {
-						if peers, ok := vrfInfo["peers"].(map[string]any); ok {
-							// Check each specific peer
-							for _, expectedPeer := range af.Peers {
-								if peerData, peerExists := peers[expectedPeer]; peerExists {
-									if peerInfo, ok := peerData.(map[string]any); ok {
-										// Check peer state
-										if state, ok := peerInfo["peerState"].(string); ok {
-											if !strings.EqualFold(state, "Established") {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s is %s, not Established",
-													expectedPeer, vrf, state))
-											}
-										}
-									}
-								} else {
-									issues = append(issues, fmt.Sprintf("Peer %s not found in VRF %s", expectedPeer, vrf))
-								}
-							}
-						}
-					}
-				} else {
-					issues = append(issues, fmt.Sprintf("VRF %s not found", vrf))
-				}
+		vrfData, exists := vrfs[vrf]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not found", vrf))
+			continue
+		}
+		vrfInfo, ok := vrfData.(map[string]any)
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VRF %s data malformed", vrf))
+			continue
+		}
+
+		// A missing peers map means no peers configured; expected peers
+		// should still be reported as missing rather than silently passing.
+		peers, _ := vrfInfo["peers"].(map[string]any)
+
+		for _, expectedPeer := range af.Peers {
+			peerData, peerExists := peers[expectedPeer]
+			if !peerExists {
+				issues = append(issues, fmt.Sprintf("Peer %s not found in VRF %s", expectedPeer, vrf))
+				continue
+			}
+			peerInfo, ok := peerData.(map[string]any)
+			if !ok {
+				issues = append(issues, fmt.Sprintf("Peer %s data malformed in VRF %s", expectedPeer, vrf))
+				continue
+			}
+			state, ok := peerInfo["peerState"].(string)
+			if !ok {
+				issues = append(issues, fmt.Sprintf("Peer %s in VRF %s missing peerState", expectedPeer, vrf))
+				continue
+			}
+			if !strings.EqualFold(state, "Established") {
+				issues = append(issues, fmt.Sprintf("Peer %s in VRF %s is %s, not Established",
+					expectedPeer, vrf, state))
 			}
 		}
 	}
@@ -912,7 +950,17 @@ func (t *VerifyBGPSpecificPeers) Execute(ctx context.Context, dev device.Device)
 	return result, nil
 }
 
-func (t *VerifyBGPSpecificPeers) ValidateInput(input any) error { return nil }
+func (t *VerifyBGPSpecificPeers) ValidateInput(input any) error {
+	if len(t.AddressFamilies) == 0 {
+		return fmt.Errorf("at least one address family must be specified")
+	}
+	for _, af := range t.AddressFamilies {
+		if len(af.Peers) == 0 {
+			return fmt.Errorf("address family %s/%s has no peers configured", af.AFI, af.SAFI)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPPeerSession verifies the session state of BGP peers.
 //
