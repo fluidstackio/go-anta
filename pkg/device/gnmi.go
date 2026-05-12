@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,6 +106,12 @@ func (d *GNMIDevice) Disconnect() error {
 	return nil
 }
 
+// Execute issues a single gNMI CLI Get for cmd and returns the parsed result.
+//
+// End-to-end coverage lives in the env-var-gated integration smoke test in
+// gnmi_integration_test.go (Task 7); a unit-level mock of gnmic's concrete
+// Target type would require an interface abstraction not justified by any
+// current production need.
 func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, error) {
 	d.mu.RLock()
 	if d.State != ConnectionStateEstablished {
@@ -232,7 +239,14 @@ func (d *GNMIDevice) cacheKey(cmd Command) string {
 	return fmt.Sprintf("%s|v=%s|r=%d|f=%s", d.expandTemplate(cmd), cmd.Version, cmd.Revision, cmd.Format)
 }
 
-// ExecuteBatch issues gNMI Get requests for every command in cmds.
+// ExecuteBatch issues a single gNMI Get with one path per command,
+// grouped by encoding when callers mix Format values inside a batch.
+//
+// End-to-end coverage of this path lives in the env-var-gated
+// integration smoke test in gnmi_integration_test.go (added in Task 7
+// of the gNMI transport plan); a unit-level mock of gnmic's concrete
+// Target type would require an interface abstraction not justified by
+// any current production need.
 //
 // One gNMI Get can carry multiple paths but only one encoding. If
 // callers mix json and text formats inside a batch we split into one
@@ -277,7 +291,8 @@ func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comma
 			}
 		}
 		expanded := d.expandTemplate(cmd)
-		// Keep this encoding mapping in sync with Execute's.
+		// Both "" and "json" map to json_ietf; only "text" requests ASCII.
+		// Keep this in sync with Execute's identical block.
 		encoding := "json_ietf"
 		if cmd.Format == "text" {
 			encoding = "ascii"
@@ -302,7 +317,17 @@ func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comma
 		byEncoding[p.encoding] = append(byEncoding[p.encoding], p)
 	}
 
-	for encoding, group := range byEncoding {
+	// Sort keys for deterministic dispatch order — output is already
+	// in input order via p.index, but consistent network ordering keeps
+	// timestamps and per-cmd duration spread reproducible.
+	encodings := make([]string, 0, len(byEncoding))
+	for enc := range byEncoding {
+		encodings = append(encodings, enc)
+	}
+	sort.Strings(encodings)
+
+	for _, encoding := range encodings {
+		group := byEncoding[encoding]
 		opts := []gnmiapi.GNMIOption{gnmiapi.Encoding(encoding)}
 		for _, p := range group {
 			opts = append(opts, gnmiapi.Path(fmt.Sprintf("cli:/%s", p.expanded)))
