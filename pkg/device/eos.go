@@ -196,10 +196,15 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 		return results, nil
 	}
 
+	batchStart := time.Now()
 	batchResult, err := d.executeBatchCommands(ctx, commands)
 	if err != nil {
 		return nil, err
 	}
+	// EOS doesn't report per-command latency for batches; spreading the
+	// total wall time across each command in the batch is the most useful
+	// approximation.
+	perCmdDuration := time.Since(batchStart) / time.Duration(len(commands))
 
 	batchIdx := 0
 	for i, cmd := range cmds {
@@ -211,6 +216,7 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 			result := &CommandResult{
 				Command:   cmd,
 				Output:    batchResult[batchIdx],
+				Duration:  perCmdDuration,
 				Timestamp: time.Now(),
 			}
 			results[i] = result
@@ -219,6 +225,17 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 				d.cache.Set(d.cacheKey(cmd), result)
 			}
 			batchIdx++
+		} else {
+			// eAPI returned fewer entries than commands sent. Most commonly
+			// this means a per-command error stopped the batch; the upstream
+			// caller will see a typed error result here instead of a nil
+			// slot that would nil-deref downstream.
+			results[i] = &CommandResult{
+				Command:   cmd,
+				Error:     fmt.Errorf("no response from batch (likely a prior command failed and stopped the batch)"),
+				Duration:  perCmdDuration,
+				Timestamp: time.Now(),
+			}
 		}
 	}
 
