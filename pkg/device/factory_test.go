@@ -38,9 +38,16 @@ func TestNew_DispatchAndDefaults(t *testing.T) {
 			wantErrSub: "unknown transport",
 		},
 		{
-			name:       "gnmi transport not yet implemented",
-			cfg:        DeviceConfig{Name: "d1", Host: "10.0.0.1", Transport: "gnmi"},
-			wantErrSub: "not yet implemented",
+			name:         "gnmi transport with default port",
+			cfg:          DeviceConfig{Name: "d1", Host: "10.0.0.1", Transport: "gnmi"},
+			wantPort:     6030,
+			wantConcrete: "*device.GNMIDevice",
+		},
+		{
+			name:         "gnmi transport with explicit port",
+			cfg:          DeviceConfig{Name: "d1", Host: "10.0.0.1", Transport: "gnmi", Port: 9339},
+			wantPort:     9339,
+			wantConcrete: "*device.GNMIDevice",
 		},
 	}
 
@@ -60,9 +67,14 @@ func TestNew_DispatchAndDefaults(t *testing.T) {
 			if gotType != tc.wantConcrete {
 				t.Errorf("concrete type: got %s, want %s", gotType, tc.wantConcrete)
 			}
-			if eos, ok := dev.(*EOSDevice); ok {
-				if eos.Config.Port != tc.wantPort {
-					t.Errorf("port: got %d, want %d", eos.Config.Port, tc.wantPort)
+			switch d := dev.(type) {
+			case *EOSDevice:
+				if d.Config.Port != tc.wantPort {
+					t.Errorf("port: got %d, want %d", d.Config.Port, tc.wantPort)
+				}
+			case *GNMIDevice:
+				if d.Config.Port != tc.wantPort {
+					t.Errorf("port: got %d, want %d", d.Config.Port, tc.wantPort)
 				}
 			}
 		})

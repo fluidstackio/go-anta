@@ -1,7 +1,6 @@
 package device
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -14,7 +13,7 @@ func New(cfg DeviceConfig) (Device, error) {
 	case "", "eapi":
 		return NewEOSDevice(cfg), nil
 	case "gnmi":
-		return nil, errors.New("gnmi transport not yet implemented")
+		return NewGNMIDevice(cfg), nil
 	default:
 		return nil, fmt.Errorf("unknown transport %q (supported: eapi, gnmi)", cfg.Transport)
 	}
