@@ -24,24 +24,47 @@ type Inventory struct {
 }
 
 type NetworkDefinition struct {
-	Network        string            `yaml:"network" json:"network"`
-	Username       string            `yaml:"username" json:"username"`
-	Password       string            `yaml:"password" json:"password"`
-	EnablePassword string            `yaml:"enable_password,omitempty" json:"enable_password,omitempty"`
-	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
-	Port           int               `yaml:"port,omitempty" json:"port,omitempty"`
-	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Network        string   `yaml:"network" json:"network"`
+	Username       string   `yaml:"username" json:"username"`
+	Password       string   `yaml:"password" json:"-"`
+	EnablePassword string   `yaml:"enable_password,omitempty" json:"-"`
+	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Port           int      `yaml:"port,omitempty" json:"port,omitempty"`
+	Insecure       bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
 }
 
+// String redacts Password/EnablePassword so '%v' / '%+v' logger calls
+// can't leak credentials baked into network defaults.
+func (n NetworkDefinition) String() string {
+	return fmt.Sprintf("NetworkDefinition{Network:%s Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Port:%d Insecure:%t}",
+		n.Network, n.Username, redactedIfSet(n.EnablePassword), n.Tags, n.Port, n.Insecure)
+}
+
+func (n NetworkDefinition) GoString() string { return n.String() }
+
 type RangeDefinition struct {
-	Start          string            `yaml:"start" json:"start"`
-	End            string            `yaml:"end" json:"end"`
-	Username       string            `yaml:"username" json:"username"`
-	Password       string            `yaml:"password" json:"password"`
-	EnablePassword string            `yaml:"enable_password,omitempty" json:"enable_password,omitempty"`
-	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
-	Port           int               `yaml:"port,omitempty" json:"port,omitempty"`
-	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Start          string   `yaml:"start" json:"start"`
+	End            string   `yaml:"end" json:"end"`
+	Username       string   `yaml:"username" json:"username"`
+	Password       string   `yaml:"password" json:"-"`
+	EnablePassword string   `yaml:"enable_password,omitempty" json:"-"`
+	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Port           int      `yaml:"port,omitempty" json:"port,omitempty"`
+	Insecure       bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+}
+
+func (r RangeDefinition) String() string {
+	return fmt.Sprintf("RangeDefinition{Start:%s End:%s Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Port:%d Insecure:%t}",
+		r.Start, r.End, r.Username, redactedIfSet(r.EnablePassword), r.Tags, r.Port, r.Insecure)
+}
+
+func (r RangeDefinition) GoString() string { return r.String() }
+
+func redactedIfSet(s string) string {
+	if s == "" {
+		return ""
+	}
+	return "[REDACTED]"
 }
 
 func LoadInventory(path string) (*Inventory, error) {
