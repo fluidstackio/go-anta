@@ -773,29 +773,34 @@ func (t *VerifyCoredump) Execute(ctx context.Context, dev device.Device) (*test.
 		return result, nil
 	}
 
+	coredumpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected coredump output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if coredumpData, ok := cmdResult.Output.(map[string]any); ok {
-		if coreFiles, ok := coredumpData["coreFiles"].([]any); ok {
-			for _, coreFile := range coreFiles {
-				if fileInfo, ok := coreFile.(map[string]any); ok {
-					if filename, ok := fileInfo["filename"].(string); ok {
-						// Skip minidumps as they are expected diagnostic files
-						if !strings.Contains(filename, "minidump") {
-							issues = append(issues, fmt.Sprintf("Core dump file found: %s", filename))
-						}
+	if coreFiles, ok := coredumpData["coreFiles"].([]any); ok {
+		for _, coreFile := range coreFiles {
+			if fileInfo, ok := coreFile.(map[string]any); ok {
+				if filename, ok := fileInfo["filename"].(string); ok {
+					// Skip minidumps as they are expected diagnostic files
+					if !strings.Contains(filename, "minidump") {
+						issues = append(issues, fmt.Sprintf("Core dump file found: %s", filename))
 					}
 				}
 			}
 		}
+	}
 
-		// Also check for kernel core dumps
-		if kernelCores, ok := coredumpData["kernelCoreFiles"].([]any); ok {
-			for _, coreFile := range kernelCores {
-				if fileInfo, ok := coreFile.(map[string]any); ok {
-					if filename, ok := fileInfo["filename"].(string); ok {
-						issues = append(issues, fmt.Sprintf("Kernel core dump file found: %s", filename))
-					}
+	// Also check for kernel core dumps
+	if kernelCores, ok := coredumpData["kernelCoreFiles"].([]any); ok {
+		for _, coreFile := range kernelCores {
+			if fileInfo, ok := coreFile.(map[string]any); ok {
+				if filename, ok := fileInfo["filename"].(string); ok {
+					issues = append(issues, fmt.Sprintf("Kernel core dump file found: %s", filename))
 				}
 			}
 		}
@@ -860,33 +865,38 @@ func (t *VerifyAgentLogs) Execute(ctx context.Context, dev device.Device) (*test
 		return result, nil
 	}
 
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected agent logs output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		if crashLogs, ok := logData["crashLogs"].([]any); ok && len(crashLogs) > 0 {
-			for _, crashLog := range crashLogs {
-				if logInfo, ok := crashLog.(map[string]any); ok {
-					var agentName, crashTime string
-					if agent, ok := logInfo["agentName"].(string); ok {
-						agentName = agent
-					}
-					if timestamp, ok := logInfo["crashTime"].(string); ok {
-						crashTime = timestamp
-					}
-
-					issues = append(issues, fmt.Sprintf("Agent crash found: %s at %s", agentName, crashTime))
+	if crashLogs, ok := logData["crashLogs"].([]any); ok && len(crashLogs) > 0 {
+		for _, crashLog := range crashLogs {
+			if logInfo, ok := crashLog.(map[string]any); ok {
+				var agentName, crashTime string
+				if agent, ok := logInfo["agentName"].(string); ok {
+					agentName = agent
 				}
+				if timestamp, ok := logInfo["crashTime"].(string); ok {
+					crashTime = timestamp
+				}
+
+				issues = append(issues, fmt.Sprintf("Agent crash found: %s at %s", agentName, crashTime))
 			}
 		}
+	}
 
-		// Also check for recent agent restarts which might indicate crashes
-		if agents, ok := logData["agents"].(map[string]any); ok {
-			for agentName, agentData := range agents {
-				if agent, ok := agentData.(map[string]any); ok {
-					if status, ok := agent["status"].(string); ok {
-						if status == "crashed" || status == "restarting" {
-							issues = append(issues, fmt.Sprintf("Agent %s is in %s state", agentName, status))
-						}
+	// Also check for recent agent restarts which might indicate crashes
+	if agents, ok := logData["agents"].(map[string]any); ok {
+		for agentName, agentData := range agents {
+			if agent, ok := agentData.(map[string]any); ok {
+				if status, ok := agent["status"].(string); ok {
+					if status == "crashed" || status == "restarting" {
+						issues = append(issues, fmt.Sprintf("Agent %s is in %s state", agentName, status))
 					}
 				}
 			}
@@ -1452,44 +1462,49 @@ func (t *VerifyMaintenance) Execute(ctx context.Context, dev device.Device) (*te
 		return result, nil
 	}
 
+	maintenanceData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected maintenance output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if maintenanceData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check overall maintenance status
-		if status, ok := maintenanceData["status"].(string); ok {
-			if status == "maintenance" || status == "entering-maintenance" {
-				issues = append(issues, fmt.Sprintf("Device is in %s mode", status))
+	// Check overall maintenance status
+	if status, ok := maintenanceData["status"].(string); ok {
+		if status == "maintenance" || status == "entering-maintenance" {
+			issues = append(issues, fmt.Sprintf("Device is in %s mode", status))
+		}
+	}
+
+	// Check maintenance mode state
+	if maintenanceMode, ok := maintenanceData["maintenanceMode"].(bool); ok && maintenanceMode {
+		issues = append(issues, "Device maintenance mode is enabled")
+	}
+
+	// Check for scheduled maintenance
+	if scheduled, ok := maintenanceData["scheduledMaintenance"].(map[string]any); ok {
+		if active, ok := scheduled["active"].(bool); ok && active {
+			var startTime, endTime string
+			if start, ok := scheduled["startTime"].(string); ok {
+				startTime = start
 			}
-		}
-
-		// Check maintenance mode state
-		if maintenanceMode, ok := maintenanceData["maintenanceMode"].(bool); ok && maintenanceMode {
-			issues = append(issues, "Device maintenance mode is enabled")
-		}
-
-		// Check for scheduled maintenance
-		if scheduled, ok := maintenanceData["scheduledMaintenance"].(map[string]any); ok {
-			if active, ok := scheduled["active"].(bool); ok && active {
-				var startTime, endTime string
-				if start, ok := scheduled["startTime"].(string); ok {
-					startTime = start
-				}
-				if end, ok := scheduled["endTime"].(string); ok {
-					endTime = end
-				}
-				issues = append(issues, fmt.Sprintf("Scheduled maintenance is active from %s to %s", startTime, endTime))
+			if end, ok := scheduled["endTime"].(string); ok {
+				endTime = end
 			}
+			issues = append(issues, fmt.Sprintf("Scheduled maintenance is active from %s to %s", startTime, endTime))
 		}
+	}
 
-		// Check for maintenance units (protocols or features under maintenance)
-		if units, ok := maintenanceData["units"].([]any); ok && len(units) > 0 {
-			for _, unit := range units {
-				if unitInfo, ok := unit.(map[string]any); ok {
-					if name, ok := unitInfo["name"].(string); ok {
-						if state, ok := unitInfo["state"].(string); ok {
-							if state == "maintenance" || state == "entering-maintenance" {
-								issues = append(issues, fmt.Sprintf("Unit %s is in %s state", name, state))
-							}
+	// Check for maintenance units (protocols or features under maintenance)
+	if units, ok := maintenanceData["units"].([]any); ok && len(units) > 0 {
+		for _, unit := range units {
+			if unitInfo, ok := unit.(map[string]any); ok {
+				if name, ok := unitInfo["name"].(string); ok {
+					if state, ok := unitInfo["state"].(string); ok {
+						if state == "maintenance" || state == "entering-maintenance" {
+							issues = append(issues, fmt.Sprintf("Unit %s is in %s state", name, state))
 						}
 					}
 				}
