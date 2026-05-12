@@ -1805,8 +1805,17 @@ func NewVerifyEVPNType2Route(inputs map[string]any) (test.Test, error) {
 }
 
 func (t *VerifyEVPNType2Route) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
-	result := &test.TestResult{TestName: t.Name(), DeviceName: dev.Name(), Status: test.TestSuccess, Categories: t.Categories()}
-	return result, nil
+	// This test was a stub that always returned TestSuccess without checking
+	// anything. Surface TestError so operators don't believe they have
+	// coverage they don't. Implement against `show bgp evpn route-type mac-ip`
+	// (matching mac_address, ip_address, vni from inputs) to enable it.
+	return &test.TestResult{
+		TestName:   t.Name(),
+		DeviceName: dev.Name(),
+		Status:     test.TestError,
+		Message:    "VerifyEVPNType2Route is not yet implemented",
+		Categories: t.Categories(),
+	}, nil
 }
 
 func (t *VerifyEVPNType2Route) ValidateInput(input any) error { return nil }
