@@ -341,3 +341,51 @@ func isHostIP(ip net.IP, ipnet *net.IPNet) bool {
 
 	return !ip.Equal(ipnet.IP) && !ip.Equal(broadcast)
 }
+
+// DeviceDefaults holds connection settings that the CLI / env supplies
+// at run time. Sources that fetch from APIs (Netbox, dcfab) leave these
+// empty on the devices they return; the caller overlays them via
+// Inventory.ApplyDefaults.
+type DeviceDefaults struct {
+	Username  string
+	Password  string
+	Transport string
+	Insecure  bool
+	Plaintext bool
+	Port      int
+}
+
+// ApplyDefaults returns a new Inventory in which each device has any
+// empty connection-config fields filled in from d. Per-device YAML
+// values always win; defaults only fill blanks. The receiver is not
+// mutated.
+func (i *Inventory) ApplyDefaults(d DeviceDefaults) *Inventory {
+	out := &Inventory{
+		Networks: i.Networks,
+		Ranges:   i.Ranges,
+		Devices:  make([]device.DeviceConfig, len(i.Devices)),
+	}
+	for idx, dev := range i.Devices {
+		if dev.Username == "" {
+			dev.Username = d.Username
+		}
+		if dev.Password == "" {
+			dev.Password = d.Password
+		}
+		if dev.Transport == "" {
+			dev.Transport = d.Transport
+		}
+		if dev.Port == 0 {
+			dev.Port = d.Port
+		}
+		// Booleans: only flip false→true; never the reverse.
+		if !dev.Insecure && d.Insecure {
+			dev.Insecure = true
+		}
+		if !dev.Plaintext && d.Plaintext {
+			dev.Plaintext = true
+		}
+		out.Devices[idx] = dev
+	}
+	return out
+}
