@@ -38,14 +38,6 @@ func (s *NetboxSource) Load(ctx context.Context) (*Inventory, error) {
 		}
 		inv.Devices = append(inv.Devices, cfg)
 	}
-	if len(inv.Devices) == 0 {
-		// Skip Validate when there are no devices; callers may filter
-		// later. Validate would error on an empty inventory.
-		return inv, nil
-	}
-	if err := inv.Validate(); err != nil {
-		return nil, fmt.Errorf("netbox: validate inventory: %w", err)
-	}
 	return inv, nil
 }
 
