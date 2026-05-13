@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -103,5 +104,130 @@ func mockDcfabServer(t *testing.T, body string) *httptest.Server {
 	return srv
 }
 
-// silence "imported and not used" before Task 8 adds Load tests.
-var _ context.Context = context.TODO()
+func TestDcfabSource_LoadMapsDevicesToConfigs(t *testing.T) {
+	body := `{
+	  "data": {
+	    "region": {
+	      "devices": [
+	        {
+	          "name": "wdl101-fis-fm1-r1",
+	          "role": "fm",
+	          "platform": "eos",
+	          "managementInterface": {
+	            "addresses": [
+	              {"address": "fc00:800f:f01::8/64", "version": 6},
+	              {"address": "10.0.0.8/24", "version": 4}
+	            ]
+	          }
+	        },
+	        {
+	          "name": "wdl101-fis-fm1-r2",
+	          "role": "fm",
+	          "platform": "eos",
+	          "managementInterface": {
+	            "addresses": [
+	              {"address": "10.0.0.9/24", "version": 4}
+	            ]
+	          }
+	        }
+	      ]
+	    }
+	  }
+	}`
+	srv := mockDcfabServer(t, body)
+
+	src := &DcfabSource{
+		cfg: DcfabConfig{
+			Region:   "wdl1",
+			Endpoint: srv.URL,
+			PreferIP: "ipv6",
+		},
+	}
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(inv.Devices) != 2 {
+		t.Fatalf("device count: got %d want 2", len(inv.Devices))
+	}
+	// IPv6-preferring device picks the v6 address; the v4-only device
+	// falls back to v4.
+	if inv.Devices[0].Host != "fc00:800f:f01::8" {
+		t.Errorf("device 0 host: got %q want fc00:800f:f01::8", inv.Devices[0].Host)
+	}
+	if inv.Devices[1].Host != "10.0.0.9" {
+		t.Errorf("device 1 host: got %q want 10.0.0.9", inv.Devices[1].Host)
+	}
+	// Tags include role + platform + region.
+	if !containsString(inv.Devices[0].Tags, "role:fm") {
+		t.Errorf("tags missing role:fm: %v", inv.Devices[0].Tags)
+	}
+	if !containsString(inv.Devices[0].Tags, "platform:eos") {
+		t.Errorf("tags missing platform:eos: %v", inv.Devices[0].Tags)
+	}
+	if !containsString(inv.Devices[0].Tags, "region:wdl1") {
+		t.Errorf("tags missing region:wdl1: %v", inv.Devices[0].Tags)
+	}
+}
+
+func TestDcfabSource_LoadErrorsAtPaginationCap(t *testing.T) {
+	// Build a response with exactly 5000 devices to trigger the cap.
+	var b strings.Builder
+	b.WriteString(`{"data":{"region":{"devices":[`)
+	for i := 0; i < 5000; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `{"name":"r%d","role":"x","platform":"y","managementInterface":{"addresses":[{"address":"10.0.0.%d/32","version":4}]}}`, i, i%256)
+	}
+	b.WriteString(`]}}}`)
+	srv := mockDcfabServer(t, b.String())
+
+	src := &DcfabSource{cfg: DcfabConfig{Region: "x", Endpoint: srv.URL}}
+	_, err := src.Load(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "5000") {
+		t.Errorf("expected 5000-device cap error, got %v", err)
+	}
+}
+
+func TestDcfabSource_LoadSkipsDevicesWithNoAddress(t *testing.T) {
+	body := `{
+	  "data": {
+	    "region": {
+	      "devices": [
+	        {"name": "noaddr", "role": "fm", "platform": "eos", "managementInterface": null},
+	        {"name": "ok", "role": "fm", "platform": "eos",
+	         "managementInterface": {"addresses": [{"address": "10.0.0.1/24", "version": 4}]}}
+	      ]
+	    }
+	  }
+	}`
+	srv := mockDcfabServer(t, body)
+	src := &DcfabSource{cfg: DcfabConfig{Region: "x", Endpoint: srv.URL}}
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(inv.Devices) != 1 || inv.Devices[0].Name != "ok" {
+		t.Errorf("expected only ok device, got %+v", inv.Devices)
+	}
+}
+
+func TestDcfabSource_LoadHandlesGraphQLError(t *testing.T) {
+	body := `{"errors": [{"message": "region not found"}]}`
+	srv := mockDcfabServer(t, body)
+	src := &DcfabSource{cfg: DcfabConfig{Region: "nope", Endpoint: srv.URL}}
+	_, err := src.Load(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "region not found") {
+		t.Errorf("expected GraphQL error to be surfaced, got %v", err)
+	}
+}
+
+func containsString(s []string, want string) bool {
+	for _, v := range s {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}

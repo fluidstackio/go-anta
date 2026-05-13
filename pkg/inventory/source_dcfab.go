@@ -2,10 +2,14 @@ package inventory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/fluidstackio/go-anta/pkg/device"
 	"gopkg.in/yaml.v3"
 )
 
@@ -90,10 +94,146 @@ func stringSliceLiteral(in []string) string {
 	return "[" + strings.Join(parts, ",") + "]"
 }
 
-// Load is implemented in Task 8; returning an explicit error makes
-// accidental use during development obvious.
+// dcfabResponse is the JSON shape returned by the dcfab GraphQL endpoint
+// for our region/devices query.
+type dcfabResponse struct {
+	Data struct {
+		Region *struct {
+			Devices []dcfabDevice `json:"devices"`
+		} `json:"region"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors,omitempty"`
+}
+
+type dcfabDevice struct {
+	Name                string              `json:"name"`
+	Role                string              `json:"role"`
+	Platform            string              `json:"platform"`
+	ManagementInterface *dcfabMgmtInterface `json:"managementInterface"`
+}
+
+type dcfabMgmtInterface struct {
+	Addresses []dcfabAddress `json:"addresses"`
+}
+
+type dcfabAddress struct {
+	Address string `json:"address"`
+	Version int    `json:"version"`
+}
+
+// dcfabPaginationCap is the GraphQL complexity-limit-derived ceiling
+// from the dcfab skill docs. Hitting exactly this number signals
+// possible truncation.
+const dcfabPaginationCap = 5000
+
 func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
-	return nil, fmt.Errorf("DcfabSource.Load not yet implemented")
+	endpoint := dcfabEndpoint(s.cfg)
+	u := s.queryURL(endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dcfab: build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("dcfab: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("dcfab: status %d: %s", resp.StatusCode, body)
+	}
+
+	var parsed dcfabResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, fmt.Errorf("dcfab: decode response: %w", err)
+	}
+	if len(parsed.Errors) > 0 {
+		return nil, fmt.Errorf("dcfab: GraphQL error: %s", parsed.Errors[0].Message)
+	}
+	if parsed.Data.Region == nil {
+		return nil, fmt.Errorf("dcfab: region %q not found", s.cfg.Region)
+	}
+
+	devices := parsed.Data.Region.Devices
+	if len(devices) == dcfabPaginationCap {
+		return nil, fmt.Errorf("dcfab: response hit %d-device pagination cap; narrow your roles/platforms filter or implement pagination", dcfabPaginationCap)
+	}
+
+	inv := &Inventory{}
+	for _, d := range devices {
+		host := pickMgmtAddress(d.ManagementInterface, s.cfg.PreferIP)
+		if host == "" {
+			continue
+		}
+		inv.Devices = append(inv.Devices, device.DeviceConfig{
+			Name:           d.Name,
+			Host:           host,
+			Tags:           buildDcfabTags(d, s.cfg.Region),
+			Username:       s.defaults.Username,
+			Password:       s.defaults.Password,
+			EnablePassword: s.defaults.EnablePassword,
+			Timeout:        s.defaults.Timeout,
+			Transport:      s.defaults.Transport,
+			Port:           s.defaults.Port,
+			Insecure:       s.defaults.Insecure,
+			Plaintext:      s.defaults.Plaintext,
+		})
+	}
+	return inv, nil
+}
+
+// pickMgmtAddress returns the management address per the prefer_ip
+// policy. Falls back to the other family if the preferred isn't
+// present. CIDR suffix (/NN) is stripped.
+func pickMgmtAddress(mi *dcfabMgmtInterface, prefer string) string {
+	if mi == nil {
+		return ""
+	}
+	if prefer == "" {
+		prefer = "ipv6"
+	}
+	var preferred, fallback string
+	for _, a := range mi.Addresses {
+		stripped := stripCIDR(a.Address)
+		switch a.Version {
+		case 6:
+			if prefer == "ipv6" && preferred == "" {
+				preferred = stripped
+			} else if fallback == "" {
+				fallback = stripped
+			}
+		case 4:
+			if prefer == "ipv4" && preferred == "" {
+				preferred = stripped
+			} else if fallback == "" {
+				fallback = stripped
+			}
+		}
+	}
+	if preferred != "" {
+		return preferred
+	}
+	return fallback
+}
+
+func buildDcfabTags(d dcfabDevice, region string) []string {
+	tags := []string{}
+	if d.Role != "" {
+		tags = append(tags, "role:"+d.Role)
+	}
+	if d.Platform != "" {
+		tags = append(tags, "platform:"+d.Platform)
+	}
+	if region != "" {
+		tags = append(tags, "region:"+region)
+	}
+	return tags
 }
 
 func init() {
