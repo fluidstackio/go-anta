@@ -1,0 +1,18 @@
+# dcfab-backed inventory for the wdl101 lab. Pulls every ACTIVE EOS
+# device with role "fm" or "ft" from the wdl1 region. Credentials come
+# from DEVICE_USERNAME / DEVICE_PASSWORD env vars or CLI flags.
+#
+# Run:
+#   ./bin/go-anta nrfu -i examples/wdl101-dcfab.yaml \
+#       -C examples/wdl101-catalog.yaml \
+#       --device-username admin --device-password admin \
+#       --transport gnmi --progress=false
+#
+# Requires Tailscale connectivity to reach dcfab.fluidstack.io.
+
+kind: dcfab
+env: prod
+region: wdl1
+roles: [fm0, fm1, ft1, ft2]   # fabric switches; dcfab role names carry a numeric suffix
+platforms: [eos]
+prefer_ip: ipv6

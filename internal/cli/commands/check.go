@@ -25,6 +25,7 @@ var (
 	checkSource         string
 	checkRegion         string
 	checkRoles          string
+	checkPlaintext      bool
 )
 
 var CheckCmd = &cobra.Command{
@@ -49,6 +50,7 @@ func init() {
 	CheckCmd.Flags().StringVar(&checkSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	CheckCmd.Flags().StringVar(&checkRegion, "region", "", "dcfab region filter")
 	CheckCmd.Flags().StringVar(&checkRoles, "roles", "", "dcfab roles filter (comma-separated)")
+	CheckCmd.Flags().BoolVar(&checkPlaintext, "plaintext", false, "use plaintext gRPC for gnmi transport (no TLS); ignored for eapi")
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
@@ -77,6 +79,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			Password:  checkDevicePassword,
 			Transport: checkTransport,
 			Insecure:  true,
+			Plaintext: checkPlaintext,
 		},
 	})
 	if err != nil {

@@ -44,6 +44,7 @@ var (
 	source            string
 	region            string
 	roles             string
+	plaintext         bool
 )
 
 var NrfuCmd = &cobra.Command{
@@ -71,6 +72,7 @@ func init() {
 	NrfuCmd.Flags().StringVar(&source, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	NrfuCmd.Flags().StringVar(&region, "region", "", "dcfab region filter")
 	NrfuCmd.Flags().StringVar(&roles, "roles", "", "dcfab roles filter (comma-separated)")
+	NrfuCmd.Flags().BoolVar(&plaintext, "plaintext", false, "use plaintext gRPC for gnmi transport (no TLS); ignored for eapi")
 	NrfuCmd.Flags().IntVarP(&concurrency, "concurrency", "j", 10, "maximum concurrent connections")
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
 	NrfuCmd.Flags().BoolVar(&ignoreStatus, "ignore-status", false, "always return exit code 0")
@@ -115,6 +117,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 			Password:  devicePassword,
 			Transport: transport,
 			Insecure:  true, // existing default for lab use
+			Plaintext: plaintext,
 		},
 	})
 	if err != nil {
