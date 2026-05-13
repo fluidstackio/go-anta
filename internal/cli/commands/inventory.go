@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -17,16 +16,19 @@ import (
 )
 
 var (
-	invFile       string
-	invNetboxURL  string
+	invFile        string
+	invNetboxURL   string
 	invNetboxToken string
 	invNetboxQuery string
-	invTags       string
-	invDevices    string
-	invLimit      string
-	invFormat     string
-	invShowTags   bool
-	invShowExtra  bool
+	invTags        string
+	invDevices     string
+	invLimit       string
+	invFormat      string
+	invShowTags    bool
+	invShowExtra   bool
+	invSource      string
+	invRegion      string
+	invRoles       string
 )
 
 var InventoryCmd = &cobra.Command{
@@ -47,26 +49,29 @@ func init() {
 	InventoryCmd.Flags().StringVarP(&invFormat, "format", "f", "table", "output format (table, json, yaml, count)")
 	InventoryCmd.Flags().BoolVar(&invShowTags, "show-tags", false, "show device tags")
 	InventoryCmd.Flags().BoolVar(&invShowExtra, "show-extra", false, "show extra device metadata")
+	InventoryCmd.Flags().StringVar(&invSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
+	InventoryCmd.Flags().StringVar(&invRegion, "region", "", "dcfab region filter")
+	InventoryCmd.Flags().StringVar(&invRoles, "roles", "", "dcfab roles filter (comma-separated)")
 }
 
 func runInventory(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	var inv *inventory.Inventory
-	var err error
-
-	// Load inventory from Netbox or file
-	if invNetboxURL != "" || os.Getenv("NETBOX_URL") != "" {
-		inv, err = loadInventoryFromNetbox(ctx)
-	} else if invFile != "" {
-		inv, err = inventory.LoadInventory(invFile)
-	} else {
-		return fmt.Errorf("either --inventory or --netbox-url must be specified")
-	}
-	
+	inv, err := LoadInventoryForRun(ctx, InventoryLoadOptions{
+		Path:           invFile,
+		SourceOverride: invSource,
+		NetboxURL:      invNetboxURL,
+		NetboxToken:    invNetboxToken,
+		NetboxQuery:    invNetboxQuery,
+		Region:         invRegion,
+		Roles:          invRoles,
+		Defaults: inventory.DeviceDefaults{
+			Insecure: true,
+		},
+	})
 	if err != nil {
-		return fmt.Errorf("failed to load inventory: %w", err)
+		return err
 	}
 
 	// Apply filters
@@ -241,113 +246,3 @@ func formatExtra(extra map[string]string) string {
 	return strings.Join(parts, ", ")
 }
 
-func loadInventoryFromNetbox(ctx context.Context) (*inventory.Inventory, error) {
-	// Get Netbox configuration
-	url := invNetboxURL
-	if url == "" {
-		url = os.Getenv("NETBOX_URL")
-	}
-	if url == "" {
-		return nil, fmt.Errorf("Netbox URL is required (use --netbox-url or NETBOX_URL env var)")
-	}
-
-	token := invNetboxToken
-	if token == "" {
-		token = os.Getenv("NETBOX_TOKEN")
-	}
-	if token == "" {
-		return nil, fmt.Errorf("Netbox API token is required (use --netbox-token or NETBOX_TOKEN env var)")
-	}
-
-	// Parse query parameters
-	query := inventory.NetboxQuery{
-		IncludeInactive: false,
-	}
-
-	if invNetboxQuery != "" {
-		// Handle both formats: "?site_id=14&platform_id=5" or "site=dc1,platform=eos"
-		queryStr := strings.TrimPrefix(invNetboxQuery, "?")
-		
-		// Determine separator
-		separator := ","
-		if strings.Contains(queryStr, "&") {
-			separator = "&"
-		}
-		
-		pairs := strings.Split(queryStr, separator)
-		for _, pair := range pairs {
-			kv := strings.Split(pair, "=")
-			if len(kv) != 2 {
-				continue
-			}
-			key := strings.TrimSpace(kv[0])
-			value := strings.TrimSpace(kv[1])
-
-			switch key {
-			case "site", "site__slug":
-				query.Site = value
-			case "site_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.SiteID = id
-				}
-			case "role", "role__slug", "device_role", "device_role__slug":
-				query.Role = value
-			case "role_id", "device_role_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.RoleID = id
-				}
-			case "device_type", "device_type__slug":
-				query.DeviceType = value
-			case "manufacturer", "manufacturer__slug":
-				query.Manufacturer = value
-			case "manufacturer_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.ManufacturerID = id
-				}
-			case "platform", "platform__slug":
-				query.Platform = value
-			case "platform_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.PlatformID = id
-				}
-			case "status":
-				query.Status = value
-			case "tenant", "tenant__slug":
-				query.Tenant = value
-			case "region", "region__slug":
-				query.Region = value
-			case "name":
-				query.Name = value
-			case "name__ic", "name_contains":
-				query.NameContains = value
-			case "tag":
-				query.Tags = append(query.Tags, value)
-			}
-		}
-	}
-
-	// Get device credentials - default to admin if not specified
-	credentials := make(map[string]interface{})
-	username := os.Getenv("DEVICE_USERNAME")
-	if username == "" {
-		username = "admin"  // Default username
-	}
-	credentials["username"] = username
-	
-	if password := os.Getenv("DEVICE_PASSWORD"); password != "" {
-		credentials["password"] = password
-	}
-	if enablePassword := os.Getenv("DEVICE_ENABLE_PASSWORD"); enablePassword != "" {
-		credentials["enable_password"] = enablePassword
-	}
-	credentials["insecure"] = true
-
-	config := inventory.NetboxConfig{
-		URL:      url,
-		Token:    token,
-		Insecure: os.Getenv("NETBOX_INSECURE") == "true",
-	}
-
-	fmt.Fprintf(os.Stderr, "Loading devices from Netbox: %s\n", url)
-	return inventory.LoadFromNetbox(config, query, credentials)
-}

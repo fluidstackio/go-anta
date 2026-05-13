@@ -22,6 +22,9 @@ var (
 	checkDeviceUsername string
 	checkDevicePassword string
 	checkTransport      string
+	checkSource         string
+	checkRegion         string
+	checkRoles          string
 )
 
 var CheckCmd = &cobra.Command{
@@ -43,6 +46,9 @@ func init() {
 	CheckCmd.Flags().StringVar(&checkDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
 	CheckCmd.Flags().BoolVar(&checkNoConnect, "no-connect", false, "only show inventory without connecting to devices")
 	CheckCmd.Flags().StringVar(&checkTransport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
+	CheckCmd.Flags().StringVar(&checkSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
+	CheckCmd.Flags().StringVar(&checkRegion, "region", "", "dcfab region filter")
+	CheckCmd.Flags().StringVar(&checkRoles, "roles", "", "dcfab roles filter (comma-separated)")
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
@@ -58,20 +64,23 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown --transport value %q (supported: eapi, gnmi)", checkTransport)
 	}
 
-	var inv *inventory.Inventory
-	var err error
-
-	// Load inventory from Netbox or file
-	if checkNetboxURL != "" || os.Getenv("NETBOX_URL") != "" {
-		inv, err = loadCheckNetboxInventory(ctx)
-	} else if inventoryFile != "" {
-		inv, err = inventory.LoadInventory(inventoryFile)
-	} else {
-		return fmt.Errorf("either --inventory or --netbox-url must be specified")
-	}
-
+	inv, err := LoadInventoryForRun(ctx, InventoryLoadOptions{
+		Path:           inventoryFile,
+		SourceOverride: checkSource,
+		NetboxURL:      checkNetboxURL,
+		NetboxToken:    checkNetboxToken,
+		NetboxQuery:    checkNetboxQuery,
+		Region:         checkRegion,
+		Roles:          checkRoles,
+		Defaults: inventory.DeviceDefaults{
+			Username:  checkDeviceUsername,
+			Password:  checkDevicePassword,
+			Transport: checkTransport,
+			Insecure:  true,
+		},
+	})
 	if err != nil {
-		return fmt.Errorf("failed to load inventory: %w", err)
+		return err
 	}
 
 	if tags != "" {
@@ -148,97 +157,4 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func loadCheckNetboxInventory(ctx context.Context) (*inventory.Inventory, error) {
-	// Get Netbox configuration
-	url := checkNetboxURL
-	if url == "" {
-		url = os.Getenv("NETBOX_URL")
-	}
-	if url == "" {
-		return nil, fmt.Errorf("Netbox URL is required (use --netbox-url or NETBOX_URL env var)")
-	}
-
-	token := checkNetboxToken
-	if token == "" {
-		token = os.Getenv("NETBOX_TOKEN")
-	}
-	if token == "" {
-		return nil, fmt.Errorf("Netbox API token is required (use --netbox-token or NETBOX_TOKEN env var)")
-	}
-
-	// Parse query parameters
-	query := inventory.NetboxQuery{
-		IncludeInactive: false,
-	}
-
-	if checkNetboxQuery != "" {
-		// Parse query string (format: key1=value1,key2=value2)
-		pairs := strings.Split(checkNetboxQuery, ",")
-		for _, pair := range pairs {
-			kv := strings.Split(pair, "=")
-			if len(kv) != 2 {
-				continue
-			}
-			key := strings.TrimSpace(kv[0])
-			value := strings.TrimSpace(kv[1])
-
-			switch key {
-			case "site":
-				query.Site = value
-			case "role":
-				query.Role = value
-			case "device_type":
-				query.DeviceType = value
-			case "manufacturer":
-				query.Manufacturer = value
-			case "platform":
-				query.Platform = value
-			case "status":
-				query.Status = value
-			case "tenant":
-				query.Tenant = value
-			case "region":
-				query.Region = value
-			case "name":
-				query.Name = value
-			case "name_contains":
-				query.NameContains = value
-			case "tag":
-				query.Tags = append(query.Tags, value)
-			}
-		}
-	}
-
-	// Get device credentials - CLI flags override env vars
-	credentials := make(map[string]interface{})
-	username := checkDeviceUsername
-	if username == "" {
-		username = os.Getenv("DEVICE_USERNAME")
-	}
-	if username == "" {
-		username = "admin" // Default username
-	}
-	credentials["username"] = username
-
-	password := checkDevicePassword
-	if password == "" {
-		password = os.Getenv("DEVICE_PASSWORD")
-	}
-	if password != "" {
-		credentials["password"] = password
-	}
-	if enablePassword := os.Getenv("DEVICE_ENABLE_PASSWORD"); enablePassword != "" {
-		credentials["enable_password"] = enablePassword
-	}
-	credentials["insecure"] = true
-
-	config := inventory.NetboxConfig{
-		URL:      url,
-		Token:    token,
-		Insecure: os.Getenv("NETBOX_INSECURE") == "true",
-	}
-
-	fmt.Fprintf(os.Stderr, "Loading devices from Netbox: %s\n", url)
-	return inventory.LoadFromNetbox(config, query, credentials)
-}
 
