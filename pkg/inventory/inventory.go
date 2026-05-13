@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
 )
@@ -347,12 +348,14 @@ func isHostIP(ip net.IP, ipnet *net.IPNet) bool {
 // empty on the devices they return; the caller overlays them via
 // Inventory.ApplyDefaults.
 type DeviceDefaults struct {
-	Username  string
-	Password  string
-	Transport string
-	Insecure  bool
-	Plaintext bool
-	Port      int
+	Username       string
+	Password       string
+	EnablePassword string
+	Timeout        time.Duration
+	Transport      string
+	Insecure       bool
+	Plaintext      bool
+	Port           int
 }
 
 // ApplyDefaults returns a new Inventory in which each device has any
@@ -371,6 +374,12 @@ func (i *Inventory) ApplyDefaults(d DeviceDefaults) *Inventory {
 		}
 		if dev.Password == "" {
 			dev.Password = d.Password
+		}
+		if dev.EnablePassword == "" {
+			dev.EnablePassword = d.EnablePassword
+		}
+		if dev.Timeout == 0 {
+			dev.Timeout = d.Timeout
 		}
 		if dev.Transport == "" {
 			dev.Transport = d.Transport

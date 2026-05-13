@@ -3,7 +3,9 @@ package inventory
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -95,16 +97,18 @@ func netboxDeviceToConfig(d NetboxDevice, defaults DeviceDefaults) device.Device
 	}
 
 	return device.DeviceConfig{
-		Name:      d.Name,
-		Host:      host,
-		Tags:      tags,
-		Extra:     extra,
-		Username:  defaults.Username,
-		Password:  defaults.Password,
-		Transport: defaults.Transport,
-		Port:      defaults.Port,
-		Insecure:  defaults.Insecure,
-		Plaintext: defaults.Plaintext,
+		Name:           d.Name,
+		Host:           host,
+		Tags:           tags,
+		Extra:          extra,
+		Username:       defaults.Username,
+		Password:       defaults.Password,
+		EnablePassword: defaults.EnablePassword,
+		Timeout:        defaults.Timeout,
+		Transport:      defaults.Transport,
+		Port:           defaults.Port,
+		Insecure:       defaults.Insecure,
+		Plaintext:      defaults.Plaintext,
 	}
 }
 
@@ -135,6 +139,14 @@ func LoadFromNetbox(config NetboxConfig, query NetboxQuery, credentials map[stri
 	if v, ok := credentials["password"].(string); ok {
 		defaults.Password = v
 	}
+	if v, ok := credentials["enable_password"].(string); ok {
+		defaults.EnablePassword = v
+	}
+	if v, ok := credentials["timeout"].(string); ok {
+		if dur, err := time.ParseDuration(v); err == nil {
+			defaults.Timeout = dur
+		}
+	}
 	if v, ok := credentials["insecure"].(bool); ok {
 		defaults.Insecure = v
 	}
@@ -142,7 +154,14 @@ func LoadFromNetbox(config NetboxConfig, query NetboxQuery, credentials map[stri
 		defaults.Port = v
 	}
 	src := &NetboxSource{config: config, query: query, defaults: defaults}
-	return src.Load(context.Background())
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(inv.Devices) == 0 {
+		return nil, fmt.Errorf("no devices with primary IP found in netbox response")
+	}
+	return inv, nil
 }
 
 // NetboxInventoryConfig defines the structure for a legacy Netbox
@@ -157,14 +176,75 @@ type NetboxInventoryConfig struct {
 
 // LoadNetboxInventory is a back-compat wrapper that reads a legacy
 // inventory YAML (with a top-level netbox: block) and uses NetboxSource
-// under the hood. Routes through LoadSource so the kind-detection
-// logic stays in one place.
+// under the hood. NETBOX_URL / NETBOX_TOKEN env vars override the
+// values in the file if set (matching legacy behavior).
 func LoadNetboxInventory(path string) (*Inventory, error) {
 	src, err := LoadSource(path)
 	if err != nil {
 		return nil, err
 	}
-	return src.Load(context.Background())
+	nb, ok := src.(*NetboxSource)
+	if !ok {
+		return nil, fmt.Errorf("inventory %s: expected netbox source, got %s", path, src.Kind())
+	}
+	// Env-var overrides (legacy behavior).
+	if v := os.Getenv("NETBOX_URL"); v != "" {
+		nb.config.URL = v
+	}
+	if v := os.Getenv("NETBOX_TOKEN"); v != "" {
+		nb.config.Token = v
+	}
+	// Validate required fields with clear messages (better DX than waiting
+	// for the HTTP layer to fail).
+	if nb.config.URL == "" {
+		return nil, fmt.Errorf("inventory %s: netbox URL is required (set in YAML or NETBOX_URL env)", path)
+	}
+	if nb.config.Token == "" {
+		return nil, fmt.Errorf("inventory %s: netbox token is required (set in YAML or NETBOX_TOKEN env)", path)
+	}
+	// Re-parse credentials from the YAML file to apply as device defaults,
+	// matching legacy behavior where LoadNetboxInventory delegated to
+	// LoadFromNetbox which extracted credentials from the parsed config.
+	nb.defaults, err = loadNetboxCredentialsFromYAML(path)
+	if err != nil {
+		return nil, fmt.Errorf("inventory %s: parse credentials: %w", path, err)
+	}
+	return nb.Load(context.Background())
+}
+
+// loadNetboxCredentialsFromYAML parses the top-level credentials block from a
+// legacy Netbox inventory YAML and returns it as a DeviceDefaults value.
+func loadNetboxCredentialsFromYAML(path string) (DeviceDefaults, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return DeviceDefaults{}, err
+	}
+	var cfg NetboxInventoryConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return DeviceDefaults{}, err
+	}
+	defaults := DeviceDefaults{}
+	if v, ok := cfg.Credentials["username"].(string); ok {
+		defaults.Username = v
+	}
+	if v, ok := cfg.Credentials["password"].(string); ok {
+		defaults.Password = v
+	}
+	if v, ok := cfg.Credentials["enable_password"].(string); ok {
+		defaults.EnablePassword = v
+	}
+	if v, ok := cfg.Credentials["timeout"].(string); ok {
+		if dur, err := time.ParseDuration(v); err == nil {
+			defaults.Timeout = dur
+		}
+	}
+	if v, ok := cfg.Credentials["insecure"].(bool); ok {
+		defaults.Insecure = v
+	}
+	if v, ok := cfg.Credentials["port"].(int); ok {
+		defaults.Port = v
+	}
+	return defaults, nil
 }
 
 func init() {
@@ -197,7 +277,7 @@ func init() {
 			return nil, fmt.Errorf("netbox source: decode YAML: %w", err)
 		}
 		if legacy.Netbox.URL == "" {
-			return nil, fmt.Errorf("netbox source: url is required")
+			return nil, fmt.Errorf("netbox source: URL is required")
 		}
 		return &NetboxSource{
 			config: NetboxConfig{URL: legacy.Netbox.URL, Token: legacy.Netbox.Token, Insecure: legacy.Netbox.Insecure},
