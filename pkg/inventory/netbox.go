@@ -18,11 +18,24 @@ import (
 
 // NetboxConfig contains configuration for Netbox API connection
 type NetboxConfig struct {
-	URL      string `yaml:"url" json:"url"`
-	Token    string `yaml:"token" json:"token"`
-	Insecure bool   `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	URL      string        `yaml:"url" json:"url"`
+	Token    string        `yaml:"token" json:"-"`
+	Insecure bool          `yaml:"insecure,omitempty" json:"insecure,omitempty"`
 	Timeout  time.Duration `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
+
+// String returns a redacted NetboxConfig so the API token cannot leak
+// via fmt.Sprintf("%v", cfg) or logger calls.
+func (c NetboxConfig) String() string {
+	token := ""
+	if c.Token != "" {
+		token = "[REDACTED]"
+	}
+	return fmt.Sprintf("NetboxConfig{URL:%s Token:%s Insecure:%t Timeout:%s}",
+		c.URL, token, c.Insecure, c.Timeout)
+}
+
+func (c NetboxConfig) GoString() string { return c.String() }
 
 // NetboxClient provides access to Netbox API
 type NetboxClient struct {
@@ -281,8 +294,9 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 		allDevices = append(allDevices, nbResp.Results...)
 		logger.Debugf("Fetched %d devices from current page, total so far: %d", len(nbResp.Results), len(allDevices))
 		
-		// Check for next page
-		if nbResp.Next != "" && query.Limit == 0 {
+		// Follow pagination. query.Limit controls Netbox's per-page size, not
+		// a cap on total results, so we always follow Next until exhausted.
+		if nbResp.Next != "" {
 			apiURL = nbResp.Next
 		} else {
 			break

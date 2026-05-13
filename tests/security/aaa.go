@@ -84,6 +84,12 @@ func (t *VerifyTacacsSourceIntf) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		// Check for VRF configuration
 		if vrfData, ok := data["vrfs"].(map[string]any); ok {
@@ -200,6 +206,12 @@ func (t *VerifyTacacsServers) Execute(ctx context.Context, dev device.Device) (*
 	}
 
 	configuredServers := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		if vrfData, ok := data["vrfs"].(map[string]any); ok {
 			if vrfConfig, ok := vrfData[t.VRF].(map[string]any); ok {
@@ -323,6 +335,12 @@ func (t *VerifyTacacsServerGroups) Execute(ctx context.Context, dev device.Devic
 	}
 
 	configuredGroups := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		if groups, ok := data["serverGroups"].(map[string]any); ok {
 			for groupName := range groups {
@@ -460,6 +478,12 @@ func (t *VerifyAuthenMethods) Execute(ctx context.Context, dev device.Device) (*
 	}
 
 	failures := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		// Check login methods
 		if len(t.Login) > 0 {
@@ -610,6 +634,12 @@ func (t *VerifyAuthzMethods) Execute(ctx context.Context, dev device.Device) (*t
 	}
 
 	failures := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		// Check commands methods
 		if len(t.CommandMethods) > 0 {
@@ -774,6 +804,12 @@ func (t *VerifyAcctDefaultMethods) Execute(ctx context.Context, dev device.Devic
 	}
 
 	failures := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		// Check system accounting methods
 		if len(t.SystemMethods) > 0 {
@@ -950,6 +986,12 @@ func (t *VerifyAcctConsoleMethods) Execute(ctx context.Context, dev device.Devic
 	}
 
 	failures := []string{}
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected output: %v", err)
+		return result, nil
+	}
+
 	if data, ok := cmdResult.Output.(map[string]any); ok {
 		// Check system accounting methods
 		if len(t.SystemMethods) > 0 {

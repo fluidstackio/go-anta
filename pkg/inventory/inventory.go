@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// maxRangeSize caps the number of devices an IP range can expand to,
+// preventing runaway memory growth from misconfigured or reversed ranges.
+const maxRangeSize = 65536
+
 type Inventory struct {
 	Devices  []device.DeviceConfig `yaml:"devices" json:"devices"`
 	Networks []NetworkDefinition   `yaml:"networks,omitempty" json:"networks,omitempty"`
@@ -19,24 +24,47 @@ type Inventory struct {
 }
 
 type NetworkDefinition struct {
-	Network        string            `yaml:"network" json:"network"`
-	Username       string            `yaml:"username" json:"username"`
-	Password       string            `yaml:"password" json:"password"`
-	EnablePassword string            `yaml:"enable_password,omitempty" json:"enable_password,omitempty"`
-	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
-	Port           int               `yaml:"port,omitempty" json:"port,omitempty"`
-	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Network        string   `yaml:"network" json:"network"`
+	Username       string   `yaml:"username" json:"username"`
+	Password       string   `yaml:"password" json:"-"`
+	EnablePassword string   `yaml:"enable_password,omitempty" json:"-"`
+	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Port           int      `yaml:"port,omitempty" json:"port,omitempty"`
+	Insecure       bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
 }
 
+// String redacts Password/EnablePassword so '%v' / '%+v' logger calls
+// can't leak credentials baked into network defaults.
+func (n NetworkDefinition) String() string {
+	return fmt.Sprintf("NetworkDefinition{Network:%s Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Port:%d Insecure:%t}",
+		n.Network, n.Username, redactedIfSet(n.EnablePassword), n.Tags, n.Port, n.Insecure)
+}
+
+func (n NetworkDefinition) GoString() string { return n.String() }
+
 type RangeDefinition struct {
-	Start          string            `yaml:"start" json:"start"`
-	End            string            `yaml:"end" json:"end"`
-	Username       string            `yaml:"username" json:"username"`
-	Password       string            `yaml:"password" json:"password"`
-	EnablePassword string            `yaml:"enable_password,omitempty" json:"enable_password,omitempty"`
-	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
-	Port           int               `yaml:"port,omitempty" json:"port,omitempty"`
-	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Start          string   `yaml:"start" json:"start"`
+	End            string   `yaml:"end" json:"end"`
+	Username       string   `yaml:"username" json:"username"`
+	Password       string   `yaml:"password" json:"-"`
+	EnablePassword string   `yaml:"enable_password,omitempty" json:"-"`
+	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Port           int      `yaml:"port,omitempty" json:"port,omitempty"`
+	Insecure       bool     `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+}
+
+func (r RangeDefinition) String() string {
+	return fmt.Sprintf("RangeDefinition{Start:%s End:%s Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Port:%d Insecure:%t}",
+		r.Start, r.End, r.Username, redactedIfSet(r.EnablePassword), r.Tags, r.Port, r.Insecure)
+}
+
+func (r RangeDefinition) GoString() string { return r.String() }
+
+func redactedIfSet(s string) string {
+	if s == "" {
+		return ""
+	}
+	return "[REDACTED]"
 }
 
 func LoadInventory(path string) (*Inventory, error) {
@@ -127,7 +155,31 @@ func (i *Inventory) expandRanges() error {
 			return fmt.Errorf("invalid end IP: %s", rangeDef.End)
 		}
 
-		for ip := startIP; !ip.Equal(endIP); inc(ip) {
+		// Normalize to 16-byte form so IPv4 and IPv6 compare/iterate consistently.
+		start16 := startIP.To16()
+		end16 := endIP.To16()
+		if start16 == nil || end16 == nil {
+			return fmt.Errorf("could not normalize range %s-%s", rangeDef.Start, rangeDef.End)
+		}
+
+		// Reject cross-family ranges (one IPv4, one IPv6) — iterating across them
+		// would never terminate via Equal().
+		if (startIP.To4() == nil) != (endIP.To4() == nil) {
+			return fmt.Errorf("range %s-%s mixes IPv4 and IPv6", rangeDef.Start, rangeDef.End)
+		}
+
+		// Reject reversed ranges; otherwise inc() would walk forward forever.
+		if bytes.Compare(start16, end16) > 0 {
+			return fmt.Errorf("range start %s is greater than end %s", rangeDef.Start, rangeDef.End)
+		}
+
+		ip := make(net.IP, len(start16))
+		copy(ip, start16)
+		count := 0
+		for ; !ip.Equal(end16); inc(ip) {
+			if count >= maxRangeSize {
+				return fmt.Errorf("range %s-%s exceeds maximum size %d", rangeDef.Start, rangeDef.End, maxRangeSize)
+			}
 			dev := device.DeviceConfig{
 				Name:           ip.String(),
 				Host:           ip.String(),
@@ -139,8 +191,9 @@ func (i *Inventory) expandRanges() error {
 				Insecure:       rangeDef.Insecure,
 			}
 			i.Devices = append(i.Devices, dev)
+			count++
 		}
-		
+
 		dev := device.DeviceConfig{
 			Name:           endIP.String(),
 			Host:           endIP.String(),

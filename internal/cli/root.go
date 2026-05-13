@@ -22,6 +22,11 @@ var rootCmd = &cobra.Command{
 	Long: `GANTA (Golang ANTA) is a network testing framework inspired by the Python ANTA project.
 It provides automated testing capabilities for network devices, particularly Arista EOS devices,
 with support for concurrent test execution, flexible inventory management, and comprehensive reporting.`,
+	// main.go is the sole error printer; suppress cobra's own "Error: ..."
+	// and usage dump so framework errors aren't double-printed and the
+	// ErrTestsFailed sentinel can exit silently.
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func Execute() error {

@@ -104,26 +104,31 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 		return result, nil
 	}
 
+	versionData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected version output: %v", err)
+		return result, nil
+	}
+
 	issues := []string{}
 
-	if versionData, ok := cmdResult.Output.(map[string]any); ok {
-		if t.MinimumMemory > 0 {
-			if memTotal, ok := versionData["memTotal"].(float64); ok {
-				memTotalMB := int64(memTotal / 1024 / 1024)
-				if memTotalMB < t.MinimumMemory {
-					issues = append(issues, fmt.Sprintf("Insufficient memory: %d MB < %d MB required", 
-						memTotalMB, t.MinimumMemory))
-				}
+	if t.MinimumMemory > 0 {
+		if memTotal, ok := versionData["memTotal"].(float64); ok {
+			memTotalMB := int64(memTotal / 1024 / 1024)
+			if memTotalMB < t.MinimumMemory {
+				issues = append(issues, fmt.Sprintf("Insufficient memory: %d MB < %d MB required",
+					memTotalMB, t.MinimumMemory))
 			}
 		}
+	}
 
-		if t.MinimumFlash > 0 {
-			if flashSize, ok := versionData["flashSize"].(float64); ok {
-				flashSizeMB := int64(flashSize / 1024 / 1024)
-				if flashSizeMB < t.MinimumFlash {
-					issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
-						flashSizeMB, t.MinimumFlash))
-				}
+	if t.MinimumFlash > 0 {
+		if flashSize, ok := versionData["flashSize"].(float64); ok {
+			flashSizeMB := int64(flashSize / 1024 / 1024)
+			if flashSizeMB < t.MinimumFlash {
+				issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
+					flashSizeMB, t.MinimumFlash))
 			}
 		}
 	}

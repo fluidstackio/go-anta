@@ -2,6 +2,7 @@ package device
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -11,13 +12,18 @@ type cacheEntry struct {
 }
 
 type CommandCache struct {
-	mu       sync.RWMutex
-	entries  map[string]*cacheEntry
-	maxSize  int
-	ttl      time.Duration
-	hits     int64
-	misses   int64
-	evictions int64
+	mu      sync.RWMutex
+	entries map[string]*cacheEntry
+	maxSize int
+	ttl     time.Duration
+
+	// Counters are accessed concurrently by Get under RLock (read path,
+	// hot) and by Set/evictOldest/cleanup under Lock. Atomics let the
+	// read path stay lock-free for counter mutation while still being
+	// race-free.
+	hits      atomic.Int64
+	misses    atomic.Int64
+	evictions atomic.Int64
 }
 
 func NewCommandCache(maxSize int, ttl time.Duration) *CommandCache {
@@ -37,16 +43,16 @@ func (c *CommandCache) Get(key string) *CommandResult {
 
 	entry, exists := c.entries[key]
 	if !exists {
-		c.misses++
+		c.misses.Add(1)
 		return nil
 	}
 
 	if time.Since(entry.timestamp) > c.ttl {
-		c.misses++
+		c.misses.Add(1)
 		return nil
 	}
 
-	c.hits++
+	c.hits.Add(1)
 	return entry.result
 }
 
@@ -69,9 +75,9 @@ func (c *CommandCache) Clear() {
 	defer c.mu.Unlock()
 
 	c.entries = make(map[string]*cacheEntry)
-	c.hits = 0
-	c.misses = 0
-	c.evictions = 0
+	c.hits.Store(0)
+	c.misses.Store(0)
+	c.evictions.Store(0)
 }
 
 func (c *CommandCache) evictOldest() {
@@ -87,7 +93,7 @@ func (c *CommandCache) evictOldest() {
 
 	if oldestKey != "" {
 		delete(c.entries, oldestKey)
-		c.evictions++
+		c.evictions.Add(1)
 	}
 }
 
@@ -108,7 +114,7 @@ func (c *CommandCache) cleanup() {
 	for key, entry := range c.entries {
 		if now.Sub(entry.timestamp) > c.ttl {
 			delete(c.entries, key)
-			c.evictions++
+			c.evictions.Add(1)
 		}
 	}
 }
@@ -118,9 +124,9 @@ func (c *CommandCache) Stats() map[string]int64 {
 	defer c.mu.RUnlock()
 
 	return map[string]int64{
-		"hits":      c.hits,
-		"misses":    c.misses,
-		"evictions": c.evictions,
+		"hits":      c.hits.Load(),
+		"misses":    c.misses.Load(),
+		"evictions": c.evictions.Load(),
 		"size":      int64(len(c.entries)),
 	}
 }

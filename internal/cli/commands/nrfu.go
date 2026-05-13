@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
@@ -78,7 +80,8 @@ func init() {
 }
 
 func runNrfu(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// Configure logging based on flags IMMEDIATELY before any other operations
 	configureLogging()
@@ -219,7 +222,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	if !ignoreStatus {
 		for _, result := range results {
 			if result.Status == test.TestFailure || result.Status == test.TestError {
-				os.Exit(1)
+				return ErrTestsFailed
 			}
 		}
 	}

@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
-	
+
 	"github.com/fluidstackio/go-anta/internal/logger"
 )
 
@@ -18,7 +17,6 @@ type EOSDevice struct {
 	BaseDevice
 	client    *http.Client
 	cache     *CommandCache
-	mu        sync.RWMutex
 	requestID int
 }
 
@@ -49,13 +47,19 @@ func NewEOSDevice(config DeviceConfig) *EOSDevice {
 		},
 	}
 
+	// Per-device transport. Keep-alives are on so concurrent test workers
+	// against the same device share TCP+TLS connections; without this each
+	// command pays a full handshake and TIME_WAIT-accumulates ephemeral
+	// ports under load. MaxConnsPerHost caps simultaneous in-flight
+	// requests against a single device to avoid stampeding its control
+	// plane.
 	tr := &http.Transport{
 		TLSClientConfig:       tlsConfig,
-		DisableKeepAlives:     true,  // Disable connection reuse
-		DisableCompression:    true,  // Disable compression
-		MaxIdleConns:          1,     // Limit idle connections
-		MaxIdleConnsPerHost:   1,     // Limit idle connections per host
-		IdleConnTimeout:       10 * time.Second,
+		DisableCompression:    true,
+		MaxIdleConns:          16,
+		MaxIdleConnsPerHost:   16,
+		MaxConnsPerHost:       16,
+		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
@@ -127,6 +131,9 @@ func (d *EOSDevice) Disconnect() error {
 	if d.cache != nil {
 		d.cache.Clear()
 	}
+	if d.client != nil {
+		d.client.CloseIdleConnections()
+	}
 	return nil
 }
 
@@ -139,7 +146,7 @@ func (d *EOSDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, e
 	d.mu.RUnlock()
 
 	if cmd.UseCache && d.cache != nil {
-		if cached := d.cache.Get(cmd.Template); cached != nil {
+		if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
 			cached.Cached = true
 			return cached, nil
 		}
@@ -151,7 +158,7 @@ func (d *EOSDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, e
 	}
 
 	if cmd.UseCache && d.cache != nil {
-		d.cache.Set(cmd.Template, result)
+		d.cache.Set(d.cacheKey(cmd), result)
 	}
 
 	return result, nil
@@ -170,7 +177,7 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 
 	for i, cmd := range cmds {
 		if cmd.UseCache && d.cache != nil {
-			if cached := d.cache.Get(cmd.Template); cached != nil {
+			if cached := d.cache.Get(d.cacheKey(cmd)); cached != nil {
 				cached.Cached = true
 				results[i] = cached
 				continue
@@ -189,10 +196,15 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 		return results, nil
 	}
 
+	batchStart := time.Now()
 	batchResult, err := d.executeBatchCommands(ctx, commands)
 	if err != nil {
 		return nil, err
 	}
+	// EOS doesn't report per-command latency for batches; spreading the
+	// total wall time across each command in the batch is the most useful
+	// approximation.
+	perCmdDuration := time.Since(batchStart) / time.Duration(len(commands))
 
 	batchIdx := 0
 	for i, cmd := range cmds {
@@ -204,14 +216,26 @@ func (d *EOSDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comman
 			result := &CommandResult{
 				Command:   cmd,
 				Output:    batchResult[batchIdx],
+				Duration:  perCmdDuration,
 				Timestamp: time.Now(),
 			}
 			results[i] = result
 
 			if cmd.UseCache && d.cache != nil {
-				d.cache.Set(cmd.Template, result)
+				d.cache.Set(d.cacheKey(cmd), result)
 			}
 			batchIdx++
+		} else {
+			// eAPI returned fewer entries than commands sent. Most commonly
+			// this means a per-command error stopped the batch; the upstream
+			// caller will see a typed error result here instead of a nil
+			// slot that would nil-deref downstream.
+			results[i] = &CommandResult{
+				Command:   cmd,
+				Error:     fmt.Errorf("no response from batch (likely a prior command failed and stopped the batch)"),
+				Duration:  perCmdDuration,
+				Timestamp: time.Now(),
+			}
 		}
 	}
 
@@ -356,9 +380,6 @@ func (d *EOSDevice) sendRequest(ctx context.Context, payload interface{}) ([]byt
 		return nil, err
 	}
 	logger.Debugf("JSON payload marshaled for %s, size: %d bytes", d.Config.Name, len(jsonData))
-	
-	// Dump the JSON payload for debugging
-	logger.Infof("JSON Request for %s:\n%s", d.Config.Name, string(jsonData))
 
 	url := fmt.Sprintf("https://%s:%d/command-api", d.Config.Host, d.Config.Port)
 	logger.Debugf("Creating HTTP request for %s to %s", d.Config.Name, url)
@@ -371,12 +392,7 @@ func (d *EOSDevice) sendRequest(ctx context.Context, payload interface{}) ([]byt
 	req.SetBasicAuth(d.Config.Username, d.Config.Password)
 
 	logger.Debugf("Making HTTP request to %s with username: %s", url, d.Config.Username)
-	
-	// Generate curl command for manual testing
-	curlCmd := fmt.Sprintf("curl -k -X POST %s -H \"Content-Type: application/json\" -u \"%s:%s\" -d '%s'", 
-		url, d.Config.Username, d.Config.Password, string(jsonData))
-	logger.Infof("Equivalent curl command:\n%s", curlCmd)
-	
+
 	// Create a shorter timeout context for the HTTP request
 	httpCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -412,6 +428,15 @@ func (d *EOSDevice) expandTemplate(cmd Command) string {
 		cmdStr = strings.ReplaceAll(cmdStr, placeholder, fmt.Sprint(value))
 	}
 	return cmdStr
+}
+
+// cacheKey produces a cache key that distinguishes between commands that
+// share a Template but differ in Params, Version, Revision, or Format.
+// Keying on Template alone caused silent cross-test result reuse (e.g. two
+// "show ip bgp neighbors {neighbor}" calls with different params would
+// return each other's cached output).
+func (d *EOSDevice) cacheKey(cmd Command) string {
+	return fmt.Sprintf("%s|v=%s|r=%d|f=%s", d.expandTemplate(cmd), cmd.Version, cmd.Revision, cmd.Format)
 }
 
 func (d *EOSDevice) getRequestID() int {

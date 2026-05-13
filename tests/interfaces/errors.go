@@ -121,6 +121,12 @@ func (t *VerifyInterfaceErrors) Execute(ctx context.Context, dev device.Device) 
 		return result, nil
 	}
 
+	if _, err := test.AsMap(cmdResult.Output); err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected error counter output: %v", err)
+		return result, nil
+	}
+
 	deviceErrors := make(map[string]InterfaceErrorCounters)
 
 	if errorData, ok := cmdResult.Output.(map[string]any); ok {
@@ -164,10 +170,8 @@ func (t *VerifyInterfaceErrors) Execute(ctx context.Context, dev device.Device) 
 	if t.CheckAll && len(t.Interfaces) == 0 {
 		// Check all interfaces with default thresholds (0 for all error types)
 		for intfName, counters := range deviceErrors {
-			if failures := t.checkInterfaceErrors(intfName, counters, InterfaceErrorThresholds{Name: intfName}); len(failures) > 0 {
-				for _, failure := range failures {
-					failures = append(failures, failure)
-				}
+			if intfFailures := t.checkInterfaceErrors(intfName, counters, InterfaceErrorThresholds{Name: intfName}); len(intfFailures) > 0 {
+				failures = append(failures, intfFailures...)
 			}
 		}
 	} else {
