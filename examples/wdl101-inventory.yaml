@@ -1,0 +1,13 @@
+# Inventory for the wdl101-fis-fm1-r1 lab device, configured for gNMI.
+#
+# To switch to eAPI: change transport to "eapi" and port to 443.
+
+devices:
+  - name: "wdl101-fis-fm1-r1"
+    host: "fc00:800f:f01::8"
+    port: 6030
+    transport: "gnmi"
+    username: "admin"
+    password: "admin"
+    plaintext: true   # gNMI server speaks plaintext gRPC (matches gnmic --insecure)
+    tags: ["lab", "gnmi"]
