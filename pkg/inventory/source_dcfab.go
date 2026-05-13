@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"gopkg.in/yaml.v3"
 )
@@ -24,9 +26,10 @@ type DcfabConfig struct {
 }
 
 // DcfabSource implements Source by querying the dcfab GraphQL API.
+// Credentials are not stored on the source — the caller applies them
+// via Inventory.ApplyDefaults after Load.
 type DcfabSource struct {
-	cfg      DcfabConfig
-	defaults DeviceDefaults
+	cfg DcfabConfig
 }
 
 func (s *DcfabSource) Kind() string { return "dcfab" }
@@ -136,6 +139,11 @@ type dcfabAddress struct {
 // possible truncation.
 const dcfabPaginationCap = 5000
 
+// dcfabHTTPTimeout caps a single dcfab query. The ctx deadline still
+// dominates if shorter; this just protects against hung connections
+// when the caller passed an unbounded context.
+const dcfabHTTPTimeout = 30 * time.Second
+
 func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
 	endpoint := dcfabEndpoint(s.cfg)
 	u := s.queryURL(endpoint)
@@ -146,7 +154,8 @@ func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: dcfabHTTPTimeout}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("dcfab: %w", err)
 	}
@@ -177,20 +186,13 @@ func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
 	for _, d := range devices {
 		host := pickMgmtAddress(d.ManagementInterface, s.cfg.PreferIP)
 		if host == "" {
+			logger.Warnf("dcfab: skipping device %s — no management address", d.Name)
 			continue
 		}
 		inv.Devices = append(inv.Devices, device.DeviceConfig{
-			Name:           d.Name,
-			Host:           host,
-			Tags:           buildDcfabTags(d, s.cfg.Region),
-			Username:       s.defaults.Username,
-			Password:       s.defaults.Password,
-			EnablePassword: s.defaults.EnablePassword,
-			Timeout:        s.defaults.Timeout,
-			Transport:      s.defaults.Transport,
-			Port:           s.defaults.Port,
-			Insecure:       s.defaults.Insecure,
-			Plaintext:      s.defaults.Plaintext,
+			Name: d.Name,
+			Host: host,
+			Tags: buildDcfabTags(d, s.cfg.Region),
 		})
 	}
 	return inv, nil
