@@ -29,6 +29,7 @@ func main() {
 	port := flag.Int("port", 0, "device port (default 443 for eapi, 6030 for gnmi)")
 	transport := flag.String("transport", "eapi", "transport: eapi or gnmi")
 	insecure := flag.Bool("insecure", true, "skip TLS verification")
+	plaintext := flag.Bool("plaintext", false, "use plaintext gRPC (no TLS); gnmi transport only")
 	cmdStr := flag.String("cmd", "show version", "CLI command to run")
 	flag.Parse()
 
@@ -50,6 +51,7 @@ func main() {
 		Password:  password,
 		Transport: *transport,
 		Insecure:  *insecure,
+		Plaintext: *plaintext,
 		Timeout:   10 * time.Second,
 	})
 	if err != nil {
