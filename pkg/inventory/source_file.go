@@ -58,8 +58,10 @@ func (e deviceEntry) toConfig() device.DeviceConfig {
 // Kind returns the registered name for this source type.
 func (s *FileSource) Kind() string { return "file" }
 
-// Load expands networks and ranges, converts entries to DeviceConfig, and
-// validates the resulting Inventory.
+// Load expands networks and ranges and converts entries to DeviceConfig.
+// Inventory.Validate is intentionally NOT called here — the CLI helper
+// (LoadInventoryForRun) validates after ApplyDefaults so all source
+// implementations share one lifecycle: Load → ApplyDefaults → Validate.
 func (s *FileSource) Load(ctx context.Context) (*Inventory, error) {
 	inv := &Inventory{
 		Networks: s.networks,
@@ -73,9 +75,6 @@ func (s *FileSource) Load(ctx context.Context) (*Inventory, error) {
 	}
 	if err := inv.expandRanges(); err != nil {
 		return nil, fmt.Errorf("expand ranges: %w", err)
-	}
-	if err := inv.Validate(); err != nil {
-		return nil, fmt.Errorf("validate inventory: %w", err)
 	}
 	return inv, nil
 }

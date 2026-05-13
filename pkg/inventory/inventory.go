@@ -68,13 +68,22 @@ func redactedIfSet(s string) string {
 }
 
 // LoadInventory is a back-compat wrapper around LoadSource. New callers
-// should use LoadSource directly so they can pass a context to Load.
+// should use LoadSource directly so they can pass a context to Load and
+// supply DeviceDefaults via the CLI helper. This wrapper preserves the
+// pre-abstraction behavior of returning a validated inventory.
 func LoadInventory(path string) (*Inventory, error) {
 	src, err := LoadSource(path)
 	if err != nil {
 		return nil, err
 	}
-	return src.Load(context.Background())
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := inv.Validate(); err != nil {
+		return nil, fmt.Errorf("validate inventory: %w", err)
+	}
+	return inv, nil
 }
 
 func (i *Inventory) expandNetworks() error {
