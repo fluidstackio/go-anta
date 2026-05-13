@@ -16,19 +16,21 @@ import (
 )
 
 var (
-	invFile        string
-	invNetboxURL   string
-	invNetboxToken string
-	invNetboxQuery string
-	invTags        string
-	invDevices     string
-	invLimit       string
-	invFormat      string
-	invShowTags    bool
-	invShowExtra   bool
-	invSource      string
-	invRegion      string
-	invRoles       string
+	invFile           string
+	invNetboxURL      string
+	invNetboxToken    string
+	invNetboxQuery    string
+	invTags           string
+	invDevices        string
+	invLimit          string
+	invFormat         string
+	invShowTags       bool
+	invShowExtra      bool
+	invSource         string
+	invRegion         string
+	invRoles          string
+	invDeviceUsername string
+	invDevicePassword string
 )
 
 var InventoryCmd = &cobra.Command{
@@ -52,6 +54,8 @@ func init() {
 	InventoryCmd.Flags().StringVar(&invSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	InventoryCmd.Flags().StringVar(&invRegion, "region", "", "dcfab region filter")
 	InventoryCmd.Flags().StringVar(&invRoles, "roles", "", "dcfab roles filter (comma-separated)")
+	InventoryCmd.Flags().StringVar(&invDeviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
+	InventoryCmd.Flags().StringVar(&invDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
 }
 
 func runInventory(cmd *cobra.Command, args []string) error {
@@ -67,6 +71,8 @@ func runInventory(cmd *cobra.Command, args []string) error {
 		Region:         invRegion,
 		Roles:          invRoles,
 		Defaults: inventory.DeviceDefaults{
+			Username: invDeviceUsername,
+			Password: invDevicePassword,
 			Insecure: true,
 		},
 	})
