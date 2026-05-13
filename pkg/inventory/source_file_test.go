@@ -2,8 +2,8 @@ package inventory
 
 import (
 	"context"
-	"os"
 	"testing"
+	"time"
 )
 
 func TestFileSource_LoadsDevices(t *testing.T) {
@@ -70,7 +70,10 @@ networks:
     username: admin
     password: pw
 `)
-	src, _ := LoadSource(tmp)
+	src, err := LoadSource(tmp)
+	if err != nil {
+		t.Fatalf("LoadSource: %v", err)
+	}
 	inv, err := src.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -79,8 +82,28 @@ networks:
 	if len(inv.Devices) != 2 {
 		t.Errorf("/30 should expand to 2 host devices, got %d", len(inv.Devices))
 	}
-	if _, err := os.Stat(tmp); err != nil {
-		t.Logf("temp file already gone (expected): %v", err)
+}
+
+func TestFileSource_TimeoutPropagates(t *testing.T) {
+	tmp := writeYAML(t, `
+kind: file
+devices:
+  - name: r1
+    host: 192.0.2.10
+    username: admin
+    password: pw
+    timeout: 7s
+`)
+	src, err := LoadSource(tmp)
+	if err != nil {
+		t.Fatalf("LoadSource: %v", err)
+	}
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := inv.Devices[0].Timeout; got != 7*time.Second {
+		t.Errorf("Timeout: got %s want 7s", got)
 	}
 }
 

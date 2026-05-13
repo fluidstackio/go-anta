@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -27,6 +28,7 @@ type deviceEntry struct {
 	Username       string            `yaml:"username"`
 	Password       string            `yaml:"password"`
 	EnablePassword string            `yaml:"enable_password,omitempty"`
+	Timeout        time.Duration     `yaml:"timeout,omitempty"`
 	Tags           []string          `yaml:"tags,omitempty"`
 	Insecure       bool              `yaml:"insecure,omitempty"`
 	Plaintext      bool              `yaml:"plaintext,omitempty"`
@@ -43,6 +45,7 @@ func (e deviceEntry) toConfig() device.DeviceConfig {
 		Username:       e.Username,
 		Password:       e.Password,
 		EnablePassword: e.EnablePassword,
+		Timeout:        e.Timeout,
 		Tags:           e.Tags,
 		Insecure:       e.Insecure,
 		Plaintext:      e.Plaintext,
