@@ -1,0 +1,46 @@
+# Test catalog for wdl101-fis-fm1-r1.
+#
+# Picked to exercise the gNMI transport end-to-end on different shapes:
+#   - flat scalar fields            (VerifyEOSVersion, VerifyUptime)
+#   - nested map traversal          (VerifyBGPSpecificPeers)
+# All three commands return JSON_IETF on Arista EOS via origin=cli.
+
+tests:
+  - name: "VerifyEOSVersion"
+    module: "system"
+    categories: ["system", "version"]
+    inputs:
+      minimum_version: "4.25.0"
+
+  - name: "VerifyUptime"
+    module: "system"
+    categories: ["system", "health"]
+    inputs:
+      minimum_uptime: 3600  # 1 hour
+
+  - name: "VerifyBGPSpecificPeers"
+    module: "routing"
+    categories: ["routing", "bgp"]
+    inputs:
+      address_families:
+        - afi: "ipv6"
+          safi: "unicast"
+          vrf: "default"
+          peers:
+            - "fc00:800f:1f::2d"
+            - "fc00:800f:1f::3a"
+
+  - name: "VerifyLLDPNeighbors"
+    module: "connectivity"
+    categories: ["connectivity", "lldp"]
+    inputs:
+      interfaces:
+        - interface: "Ethernet1/1"
+          neighbor_device: "wdl101-fis-fm0-r1"
+          neighbor_port: "Ethernet49"
+        - interface: "Ethernet1/2"
+          neighbor_device: "wdl101-fis-fm0-r2"
+          neighbor_port: "Ethernet49"
+        - interface: "Management1"
+          neighbor_device: "wdl101-fis-fm0-r1"
+          neighbor_port: "Ethernet7"

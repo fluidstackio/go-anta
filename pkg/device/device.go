@@ -50,6 +50,8 @@ type DeviceConfig struct {
 	Tags           []string          `yaml:"tags,omitempty" json:"tags,omitempty"`
 	Timeout        time.Duration     `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Insecure       bool              `yaml:"insecure,omitempty" json:"insecure,omitempty"`
+	Plaintext      bool              `yaml:"plaintext,omitempty" json:"plaintext,omitempty"`
+	Transport      string            `yaml:"transport,omitempty" json:"transport,omitempty"`
 	DisableCache   bool              `yaml:"disable_cache,omitempty" json:"disable_cache,omitempty"`
 	Extra          map[string]string `yaml:"extra,omitempty" json:"extra,omitempty"`
 }
@@ -60,8 +62,8 @@ type DeviceConfig struct {
 // through unintended `logger.Debugf("config: %+v", cfg)` calls.
 func (c DeviceConfig) String() string {
 	return fmt.Sprintf(
-		"DeviceConfig{Name:%s Host:%s Port:%d Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Timeout:%s Insecure:%t}",
-		c.Name, c.Host, c.Port, c.Username, redactedIfSet(c.EnablePassword), c.Tags, c.Timeout, c.Insecure,
+		"DeviceConfig{Name:%s Host:%s Port:%d Username:%s Password:[REDACTED] EnablePassword:%s Tags:%v Timeout:%s Insecure:%t Transport:%s}",
+		c.Name, c.Host, c.Port, c.Username, redactedIfSet(c.EnablePassword), c.Tags, c.Timeout, c.Insecure, c.Transport,
 	)
 }
 
