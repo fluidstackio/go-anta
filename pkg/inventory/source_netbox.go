@@ -259,11 +259,11 @@ func init() {
 
 		var legacy struct {
 			Netbox struct {
-				URL      string      `yaml:"url"`
-				Token    string      `yaml:"token"`
-				Insecure bool        `yaml:"insecure"`
-				Query    NetboxQuery `yaml:"query"`
+				URL      string `yaml:"url"`
+				Token    string `yaml:"token"`
+				Insecure bool   `yaml:"insecure"`
 			} `yaml:"netbox"`
+			Query NetboxQuery `yaml:"query"`
 		}
 		if err := node.Decode(&legacy); err != nil {
 			return nil, fmt.Errorf("netbox source: decode YAML: %w", err)
@@ -273,7 +273,7 @@ func init() {
 		}
 		return &NetboxSource{
 			config: NetboxConfig{URL: legacy.Netbox.URL, Token: legacy.Netbox.Token, Insecure: legacy.Netbox.Insecure},
-			query:  legacy.Netbox.Query,
+			query:  legacy.Query,
 		}, nil
 	})
 }

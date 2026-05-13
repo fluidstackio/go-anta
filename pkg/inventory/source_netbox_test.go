@@ -48,8 +48,8 @@ func TestNetboxSource_LegacyFormat(t *testing.T) {
 netbox:
   url: https://netbox.example.com
   token: secret
-  query:
-    site: wdl1
+query:
+  site: wdl1
 `)
 	src, err := LoadSource(tmp)
 	if err != nil {
