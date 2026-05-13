@@ -31,6 +31,14 @@ type DcfabSource struct {
 
 func (s *DcfabSource) Kind() string { return "dcfab" }
 
+// SetRegion overrides the region after the source was constructed.
+// Used by the CLI --region flag.
+func (s *DcfabSource) SetRegion(region string) { s.cfg.Region = region }
+
+// SetRoles overrides the roles filter after the source was constructed.
+// Used by the CLI --roles flag.
+func (s *DcfabSource) SetRoles(roles []string) { s.cfg.Roles = roles }
+
 // dcfabEndpoint resolves the HTTPS endpoint from the config. Explicit
 // Endpoint wins; otherwise Env selects between prod/dev defaults.
 func dcfabEndpoint(cfg DcfabConfig) string {

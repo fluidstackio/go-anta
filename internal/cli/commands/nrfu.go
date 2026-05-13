@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -42,6 +41,9 @@ var (
 	progress          bool
 	silent            bool
 	transport         string
+	source            string
+	region            string
+	roles             string
 )
 
 var NrfuCmd = &cobra.Command{
@@ -66,6 +68,9 @@ func init() {
 	NrfuCmd.Flags().StringVar(&deviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	NrfuCmd.Flags().StringVar(&devicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
 	NrfuCmd.Flags().StringVar(&transport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
+	NrfuCmd.Flags().StringVar(&source, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
+	NrfuCmd.Flags().StringVar(&region, "region", "", "dcfab region filter")
+	NrfuCmd.Flags().StringVar(&roles, "roles", "", "dcfab roles filter (comma-separated)")
 	NrfuCmd.Flags().IntVarP(&concurrency, "concurrency", "j", 10, "maximum concurrent connections")
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
 	NrfuCmd.Flags().BoolVar(&ignoreStatus, "ignore-status", false, "always return exit code 0")
@@ -97,18 +102,21 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	// Configure logging based on flags IMMEDIATELY before any other operations
 	configureLogging()
 
-	var inv *inventory.Inventory
-	var err error
-
-	// Check if Netbox is being used
-	if netboxURL != "" || os.Getenv("NETBOX_URL") != "" {
-		inv, err = loadNetboxInventory(ctx)
-	} else if inventoryFile != "" {
-		inv, err = inventory.LoadInventory(inventoryFile)
-	} else {
-		return fmt.Errorf("either --inventory or --netbox-url must be specified")
-	}
-	
+	inv, err := LoadInventoryForRun(ctx, InventoryLoadOptions{
+		Path:           inventoryFile,
+		SourceOverride: source,
+		NetboxURL:      netboxURL,
+		NetboxToken:    netboxToken,
+		NetboxQuery:    netboxQuery,
+		Region:         region,
+		Roles:          roles,
+		Defaults: inventory.DeviceDefaults{
+			Username:  deviceUsername,
+			Password:  devicePassword,
+			Transport: transport,
+			Insecure:  true, // existing default for lab use
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load inventory: %w", err)
 	}
@@ -264,135 +272,6 @@ func filterResults(results []test.TestResult, hide string) []test.TestResult {
 	return filtered
 }
 
-func loadNetboxInventory(ctx context.Context) (*inventory.Inventory, error) {
-	// Get Netbox configuration
-	url := netboxURL
-	if url == "" {
-		url = os.Getenv("NETBOX_URL")
-	}
-	if url == "" {
-		return nil, fmt.Errorf("Netbox URL is required (use --netbox-url or NETBOX_URL env var)")
-	}
-
-	token := netboxToken
-	if token == "" {
-		token = os.Getenv("NETBOX_TOKEN")
-	}
-	if token == "" {
-		return nil, fmt.Errorf("Netbox API token is required (use --netbox-token or NETBOX_TOKEN env var)")
-	}
-
-	// Parse query parameters
-	query := inventory.NetboxQuery{
-		IncludeInactive: false,
-	}
-
-	if netboxQuery != "" {
-		// Handle both formats: "?site_id=14&platform_id=5" or "site=dc1,platform=eos"
-		queryStr := strings.TrimPrefix(netboxQuery, "?")
-		
-		// Determine separator
-		separator := ","
-		if strings.Contains(queryStr, "&") {
-			separator = "&"
-		}
-		
-		pairs := strings.Split(queryStr, separator)
-		for _, pair := range pairs {
-			kv := strings.Split(pair, "=")
-			if len(kv) != 2 {
-				continue
-			}
-			key := strings.TrimSpace(kv[0])
-			value := strings.TrimSpace(kv[1])
-
-			switch key {
-			case "site", "site__slug":
-				query.Site = value
-			case "site_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.SiteID = id
-				}
-			case "role", "role__slug", "device_role", "device_role__slug":
-				query.Role = value
-			case "role_id", "device_role_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.RoleID = id
-				}
-			case "device_type", "device_type__slug":
-				query.DeviceType = value
-			case "device_type_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.DeviceTypeID = id
-				}
-			case "manufacturer", "manufacturer__slug":
-				query.Manufacturer = value
-			case "manufacturer_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.ManufacturerID = id
-				}
-			case "platform", "platform__slug":
-				query.Platform = value
-			case "platform_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.PlatformID = id
-				}
-			case "status":
-				query.Status = value
-			case "tenant", "tenant__slug":
-				query.Tenant = value
-			case "tenant_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.TenantID = id
-				}
-			case "region", "region__slug":
-				query.Region = value
-			case "region_id":
-				if id, err := strconv.Atoi(value); err == nil {
-					query.RegionID = id
-				}
-			case "name":
-				query.Name = value
-			case "name__ic", "name_contains":
-				query.NameContains = value
-			case "tag":
-				query.Tags = append(query.Tags, value)
-			}
-		}
-	}
-
-	// Get device credentials - CLI flags override env vars
-	credentials := make(map[string]interface{})
-	username := deviceUsername
-	if username == "" {
-		username = os.Getenv("DEVICE_USERNAME")
-	}
-	if username == "" {
-		username = "admin"  // Default username
-	}
-	credentials["username"] = username
-	
-	password := devicePassword
-	if password == "" {
-		password = os.Getenv("DEVICE_PASSWORD")
-	}
-	if password != "" {
-		credentials["password"] = password
-	}
-	if enablePassword := os.Getenv("DEVICE_ENABLE_PASSWORD"); enablePassword != "" {
-		credentials["enable_password"] = enablePassword
-	}
-	credentials["insecure"] = true // Default for lab environments
-
-	config := inventory.NetboxConfig{
-		URL:      url,
-		Token:    token,
-		Insecure: os.Getenv("NETBOX_INSECURE") == "true",
-	}
-
-	fmt.Printf("Loading devices from Netbox: %s\n", url)
-	return inventory.LoadFromNetbox(config, query, credentials)
-}
 
 // configureLogging sets up logging based on command line flags
 func configureLogging() {

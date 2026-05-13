@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -115,4 +117,61 @@ func TestParseNetboxQueryString_Empty(t *testing.T) {
 	if q.Site != "" || q.Role != "" || len(q.Tags) != 0 {
 		t.Errorf("expected zero query, got %+v", q)
 	}
+}
+
+func TestLoadInventoryForRun_DcfabRegionRolesOverride(t *testing.T) {
+	// Build a JSON body that the mock dcfab endpoint will return.
+	body := `{"data":{"region":{"devices":[{"name":"d","role":"x","platform":"y","managementInterface":{"addresses":[{"address":"10.0.0.1/24","version":4}]}}]}}}`
+	srv := mockHTTPServer(t, body)
+
+	dir := t.TempDir()
+	path := dir + "/dcfab.yaml"
+	yaml := `
+kind: dcfab
+region: original-region
+roles: [original]
+endpoint: ` + srv.URL + `
+`
+	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	opts := InventoryLoadOptions{
+		Path:   path,
+		Region: "overridden-region",
+		Roles:  "fm,ft",
+		Defaults: inventory.DeviceDefaults{
+			Username: "admin",
+			Password: "pw",
+		},
+	}
+	inv, err := LoadInventoryForRun(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("LoadInventoryForRun: %v", err)
+	}
+	// The region tag on each device comes from the Region used at Load time;
+	// the CLI override should have changed it from "original-region" to
+	// "overridden-region".
+	if len(inv.Devices) != 1 {
+		t.Fatalf("device count: got %d want 1", len(inv.Devices))
+	}
+	hasOverride := false
+	for _, tag := range inv.Devices[0].Tags {
+		if tag == "region:overridden-region" {
+			hasOverride = true
+		}
+	}
+	if !hasOverride {
+		t.Errorf("region tag not overridden, got tags: %v", inv.Devices[0].Tags)
+	}
+}
+
+func mockHTTPServer(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
 }

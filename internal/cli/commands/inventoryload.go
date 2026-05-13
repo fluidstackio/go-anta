@@ -63,6 +63,15 @@ func LoadInventoryForRun(ctx context.Context, opts InventoryLoadOptions) (*inven
 		if err != nil {
 			return nil, err
 		}
+		// Apply CLI overrides to the source before loading.
+		if d, ok := src.(*inventory.DcfabSource); ok {
+			if opts.Region != "" {
+				d.SetRegion(opts.Region)
+			}
+			if opts.Roles != "" {
+				d.SetRoles(splitCSV(opts.Roles))
+			}
+		}
 		inv, err := src.Load(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("inventory %s: %w", opts.Path, err)
@@ -159,4 +168,20 @@ func parseNetboxQueryString(s string) inventory.NetboxQuery {
 		}
 	}
 	return q
+}
+
+// splitCSV splits a comma-separated string into trimmed, non-empty tokens.
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
