@@ -66,7 +66,13 @@ func (d *GNMIDevice) Connect(ctx context.Context) error {
 		gnmiapi.Password(d.Config.Password),
 		gnmiapi.Timeout(d.Config.Timeout),
 	}
-	if d.Config.Insecure {
+	switch {
+	case d.Config.Plaintext:
+		// Plaintext gRPC: no TLS at all. Matches gnmic's --insecure flag.
+		opts = append(opts, gnmiapi.Insecure(true))
+	case d.Config.Insecure:
+		// TLS but skip certificate verification. Matches eAPI's
+		// InsecureSkipVerify semantics for this codebase.
 		opts = append(opts, gnmiapi.SkipVerify(true))
 	}
 
