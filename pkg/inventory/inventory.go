@@ -2,15 +2,14 @@ package inventory
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
-	"gopkg.in/yaml.v3"
 )
 
 // maxRangeSize caps the number of devices an IP range can expand to,
@@ -67,54 +66,14 @@ func redactedIfSet(s string) string {
 	return "[REDACTED]"
 }
 
+// LoadInventory is a back-compat wrapper around LoadSource. New callers
+// should use LoadSource directly so they can pass a context to Load.
 func LoadInventory(path string) (*Inventory, error) {
-	// Check if it's a Netbox inventory file
-	if isNetboxInventory(path) {
-		return LoadNetboxInventory(path)
-	}
-
-	file, err := os.Open(path)
+	src, err := LoadSource(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open inventory file: %w", err)
+		return nil, err
 	}
-	defer file.Close()
-
-	var inv Inventory
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&inv); err != nil {
-		return nil, fmt.Errorf("failed to parse inventory: %w", err)
-	}
-
-	if err := inv.expandNetworks(); err != nil {
-		return nil, fmt.Errorf("failed to expand networks: %w", err)
-	}
-
-	if err := inv.expandRanges(); err != nil {
-		return nil, fmt.Errorf("failed to expand ranges: %w", err)
-	}
-
-	if err := inv.Validate(); err != nil {
-		return nil, fmt.Errorf("inventory validation failed: %w", err)
-	}
-
-	return &inv, nil
-}
-
-func isNetboxInventory(path string) bool {
-	file, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-
-	var check map[string]interface{}
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&check); err != nil {
-		return false
-	}
-
-	_, hasNetbox := check["netbox"]
-	return hasNetbox
+	return src.Load(context.Background())
 }
 
 func (i *Inventory) expandNetworks() error {
