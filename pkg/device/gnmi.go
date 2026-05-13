@@ -3,7 +3,9 @@ package device
 import (
 	"context"
 	"fmt"
+	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,7 +59,7 @@ func (d *GNMIDevice) Connect(ctx context.Context) error {
 
 	d.State = ConnectionStateConnecting
 
-	addr := fmt.Sprintf("%s:%d", d.Config.Host, d.Config.Port)
+	addr := net.JoinHostPort(d.Config.Host, strconv.Itoa(d.Config.Port))
 	opts := []gnmiapi.TargetOption{
 		gnmiapi.Address(addr),
 		gnmiapi.Username(d.Config.Username),
@@ -80,14 +82,27 @@ func (d *GNMIDevice) Connect(ctx context.Context) error {
 	d.target = target
 	d.State = ConnectionStateConnected
 	d.ConnectionTime = time.Now()
-
-	// Probe with show version (matches EOSDevice.Connect behavior) so
-	// IsEstablished() / HardwareModel() have the expected post-Connect
-	// invariants. Execute itself does not yet exist; for now we just
-	// transition state without populating Model. Task 5 will replace
-	// this with a real probe.
+	// Transition to Established BEFORE the probe so Execute (which
+	// requires Established) can run. The probe populates Model; if it
+	// fails we keep the connection (Model just stays empty).
 	d.State = ConnectionStateEstablished
-	logger.Infof("Successfully connected to %s via gNMI", d.Config.Name)
+
+	// Release the write lock for the probe — Execute takes RLock.
+	d.mu.Unlock()
+	result, probeErr := d.Execute(ctx, Command{Template: "show version", Format: "json"})
+	d.mu.Lock()
+
+	if probeErr == nil {
+		if m, ok := result.Output.(map[string]interface{}); ok {
+			if model, ok := m["modelName"].(string); ok {
+				d.Model = model
+			}
+		}
+	} else {
+		logger.Warnf("show version probe on %s failed: %v", d.Config.Name, probeErr)
+	}
+
+	logger.Infof("Successfully connected to %s via gNMI (Model: %s)", d.Config.Name, d.Model)
 	return nil
 }
 
@@ -358,14 +373,14 @@ func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comma
 				// and stopped further processing. Fill the slot with an
 				// error rather than leaving it nil so callers don't
 				// nil-deref downstream.
-				result.Error = fmt.Errorf("gNMI batch returned no response for %q", p.expanded)
+				result.Error = fmt.Errorf("device %s: gNMI batch returned no response for %q", d.Config.Name, p.expanded)
 				results[p.index] = result
 				continue
 			}
 
 			val := resp.Notification[i].Update[0].Val
 			if val == nil {
-				result.Error = fmt.Errorf("gNMI batch returned nil TypedValue for %q", p.expanded)
+				result.Error = fmt.Errorf("device %s: gNMI batch returned nil TypedValue for %q", d.Config.Name, p.expanded)
 				results[p.index] = result
 				continue
 			}
@@ -388,7 +403,20 @@ func (d *GNMIDevice) ExecuteBatch(ctx context.Context, cmds []Command) ([]*Comma
 	return results, nil
 }
 
-// Refresh returns an explicit error until Task 6/7 implements it.
+// Refresh re-probes the device with show version and refreshes the
+// HardwareModel and LastRefresh timestamp. Symmetric with EOSDevice.Refresh.
 func (d *GNMIDevice) Refresh(ctx context.Context) error {
-	return fmt.Errorf("GNMIDevice.Refresh not yet implemented")
+	result, err := d.Execute(ctx, Command{Template: "show version", Format: "json"})
+	if err != nil {
+		return fmt.Errorf("device %s: refresh failed: %w", d.Config.Name, err)
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if m, ok := result.Output.(map[string]interface{}); ok {
+		if model, ok := m["modelName"].(string); ok {
+			d.Model = model
+		}
+	}
+	d.LastRefresh = time.Now()
+	return nil
 }
