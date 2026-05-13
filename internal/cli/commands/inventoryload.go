@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/fluidstackio/go-anta/pkg/inventory"
 )
 
@@ -63,7 +64,10 @@ func LoadInventoryForRun(ctx context.Context, opts InventoryLoadOptions) (*inven
 		if err != nil {
 			return nil, err
 		}
-		// Apply CLI overrides to the source before loading.
+		// Apply CLI overrides to the source before loading. --region and
+		// --roles only mean something for a dcfab source; warn if the user
+		// supplied them with a different kind so they aren't silently
+		// confused about why their filter had no effect.
 		if d, ok := src.(*inventory.DcfabSource); ok {
 			if opts.Region != "" {
 				d.SetRegion(opts.Region)
@@ -71,6 +75,8 @@ func LoadInventoryForRun(ctx context.Context, opts InventoryLoadOptions) (*inven
 			if opts.Roles != "" {
 				d.SetRoles(splitCSV(opts.Roles))
 			}
+		} else if opts.Region != "" || opts.Roles != "" {
+			logger.Warnf("--region/--roles only apply to dcfab sources; ignored for %s source", src.Kind())
 		}
 		inv, err := src.Load(ctx)
 		if err != nil {
