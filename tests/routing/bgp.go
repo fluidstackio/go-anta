@@ -413,6 +413,25 @@ func (t *VerifyBGPUnnumbered) ValidateInput(input any) error {
 
 // ==================== Common BGP Structures for Extended Tests ====================
 
+// bgpSummaryCommand returns the EOS `show bgp ... summary` invocation that
+// scopes the response to a single address family. `show bgp summary` without
+// an AFI/SAFI returns peers from every address family at once, so callers
+// that need to count or check peers per-AF must use the scoped form to avoid
+// double-counting peers configured in multiple families.
+func bgpSummaryCommand(afi, safi string) string {
+	afi = strings.ToLower(strings.TrimSpace(afi))
+	safi = strings.ToLower(strings.TrimSpace(safi))
+	switch afi {
+	case "evpn", "rt-membership", "link-state", "vpn-ipv4", "vpn-ipv6":
+		return "show bgp " + afi + " summary"
+	default:
+		if safi == "" {
+			safi = "unicast"
+		}
+		return fmt.Sprintf("show bgp %s %s summary", afi, safi)
+	}
+}
+
 // BgpAddressFamily represents AFI/SAFI configuration
 type BgpAddressFamily struct {
 	AFI            string   `yaml:"afi" json:"afi"`
@@ -524,39 +543,39 @@ func (t *VerifyBGPPeerCount) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show bgp summary",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP summary: %v", err)
-		return result, nil
-	}
-
-	bgpData, err := test.AsMap(cmdResult.Output)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Unexpected BGP summary output: %v", err)
-		return result, nil
-	}
-
 	issues := []string{}
-
-	vrfs, ok := bgpData["vrfs"].(map[string]any)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "BGP summary output missing 'vrfs' field"
-		return result, nil
-	}
 
 	for _, af := range t.AddressFamilies {
 		vrf := af.VRF
 		if vrf == "" {
 			vrf = "default"
+		}
+
+		cmd := device.Command{
+			Template: bgpSummaryCommand(af.AFI, af.SAFI),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP summary for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		bgpData, err := test.AsMap(cmdResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected BGP summary output for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		vrfs, ok := bgpData["vrfs"].(map[string]any)
+		if !ok {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("BGP summary output for AFI %s SAFI %s missing 'vrfs' field", af.AFI, af.SAFI)
+			return result, nil
 		}
 
 		vrfData, exists := vrfs[vrf]
@@ -701,74 +720,84 @@ func (t *VerifyBGPPeersHealth) Execute(ctx context.Context, dev device.Device) (
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show bgp summary",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP summary: %v", err)
-		return result, nil
-	}
-
 	issues := []string{}
 
-	if bgpData, ok := cmdResult.Output.(map[string]any); ok {
-		if vrfs, ok := bgpData["vrfs"].(map[string]any); ok {
-			for _, af := range t.AddressFamilies {
-				vrf := af.VRF
-				if vrf == "" {
-					vrf = "default"
+	for _, af := range t.AddressFamilies {
+		vrf := af.VRF
+		if vrf == "" {
+			vrf = "default"
+		}
+
+		cmd := device.Command{
+			Template: bgpSummaryCommand(af.AFI, af.SAFI),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP summary for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		bgpData, err := test.AsMap(cmdResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected BGP summary output for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		vrfs, ok := bgpData["vrfs"].(map[string]any)
+		if !ok {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("BGP summary output for AFI %s SAFI %s missing 'vrfs' field", af.AFI, af.SAFI)
+			return result, nil
+		}
+
+		vrfData, exists := vrfs[vrf]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+		vrfInfo, ok := vrfData.(map[string]any)
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VRF %s data malformed for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+
+		peers, _ := vrfInfo["peers"].(map[string]any)
+		for peerAddr, peerData := range peers {
+			peerInfo, ok := peerData.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if state, ok := peerInfo["peerState"].(string); ok {
+				if !strings.EqualFold(state, "Established") {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s is %s, not Established",
+						peerAddr, af.AFI, af.SAFI, vrf, state))
+					continue
 				}
+			}
 
-				if vrfData, exists := vrfs[vrf]; exists {
-					if vrfInfo, ok := vrfData.(map[string]any); ok {
-						if peers, ok := vrfInfo["peers"].(map[string]any); ok {
-							for peerAddr, peerData := range peers {
-								if peerInfo, ok := peerData.(map[string]any); ok {
-									// Check peer state
-									if state, ok := peerInfo["peerState"].(string); ok {
-										if !strings.EqualFold(state, "Established") {
-											issues = append(issues, fmt.Sprintf("Peer %s in VRF %s is %s, not Established",
-												peerAddr, vrf, state))
-											continue
-										}
-									}
-
-									// Check established time if specified
-									if t.MinimumEstablishedTime > 0 {
-										if uptime, ok := peerInfo["upDownTime"].(float64); ok {
-											if uptime < float64(t.MinimumEstablishedTime) {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s established for only %.0f seconds (minimum: %d)",
-													peerAddr, vrf, uptime, t.MinimumEstablishedTime))
-											}
-										}
-									}
-
-									// Check TCP queues if enabled
-									if t.CheckTCPQueues {
-										if inQueue, ok := peerInfo["inMsgQueue"].(float64); ok {
-											if inQueue > 0 {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s has %d messages in input queue",
-													peerAddr, vrf, int(inQueue)))
-											}
-										}
-										if outQueue, ok := peerInfo["outMsgQueue"].(float64); ok {
-											if outQueue > 0 {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s has %d messages in output queue",
-													peerAddr, vrf, int(outQueue)))
-											}
-										}
-									}
-								}
-							}
-						}
+			if t.MinimumEstablishedTime > 0 {
+				if uptime, ok := peerInfo["upDownTime"].(float64); ok {
+					if uptime < float64(t.MinimumEstablishedTime) {
+						issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s established for only %.0f seconds (minimum: %d)",
+							peerAddr, af.AFI, af.SAFI, vrf, uptime, t.MinimumEstablishedTime))
 					}
-				} else {
-					issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s", vrf, af.AFI))
+				}
+			}
+
+			if t.CheckTCPQueues {
+				if inQueue, ok := peerInfo["inMsgQueue"].(float64); ok && inQueue > 0 {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s has %d messages in input queue",
+						peerAddr, af.AFI, af.SAFI, vrf, int(inQueue)))
+				}
+				if outQueue, ok := peerInfo["outMsgQueue"].(float64); ok && outQueue > 0 {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s has %d messages in output queue",
+						peerAddr, af.AFI, af.SAFI, vrf, int(outQueue)))
 				}
 			}
 		}
