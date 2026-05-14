@@ -280,7 +280,7 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 		
 		if resp.StatusCode != http.StatusOK {
 			logger.Errorf("Netbox API returned status %d", resp.StatusCode)
-			return nil, fmt.Errorf("Netbox API returned status %d", resp.StatusCode)
+			return nil, fmt.Errorf("netbox API returned status %d", resp.StatusCode)
 		}
 		
 		var nbResp NetboxResponse

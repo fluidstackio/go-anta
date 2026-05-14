@@ -37,7 +37,7 @@ func (pr *ProgressRunner) setupProgressWriter() {
 	pr.pw = progress.NewWriter()
 	pr.pw.SetAutoStop(false)
 	pr.pw.SetTrackerLength(50)
-	pr.pw.SetMessageWidth(30)
+	pr.pw.SetMessageLength(30)
 	pr.pw.SetSortBy(progress.SortByPercentDsc)
 	pr.pw.SetStyle(progress.StyleDefault)
 	pr.pw.SetTrackerPosition(progress.PositionRight)
@@ -60,10 +60,9 @@ func (pr *ProgressRunner) Run(ctx context.Context, tests []TestDefinition, devic
 
 	// Create progress trackers for each device
 	deviceTrackers := make(map[string]*progress.Tracker)
-	var overallTracker *progress.Tracker
 
 	// Setup overall progress tracker
-	overallTracker = &progress.Tracker{
+	overallTracker := &progress.Tracker{
 		Message: "Overall Progress",
 		Total:   int64(totalTests),
 		Units:   progress.UnitsDefault,

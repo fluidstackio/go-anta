@@ -1977,25 +1977,18 @@ func (t *VerifyBGPAdvCommunities) Execute(ctx context.Context, dev device.Device
 						if peerInfo, ok := peerList[0].(map[string]any); ok {
 							// Check for community capabilities and configuration
 							if capabilities, ok := peerInfo["capabilities"].(map[string]any); ok {
-								communityTypes := []string{}
 								for _, expectedComm := range peer.AdvertisedCommunities {
 									switch expectedComm {
 									case "standard":
-										if _, exists := capabilities["standardCommunity"]; exists {
-											communityTypes = append(communityTypes, "standard")
-										} else {
+										if _, exists := capabilities["standardCommunity"]; !exists {
 											issues = append(issues, fmt.Sprintf("Peer %s missing standard community capability", identifier))
 										}
 									case "extended":
-										if _, exists := capabilities["extendedCommunity"]; exists {
-											communityTypes = append(communityTypes, "extended")
-										} else {
+										if _, exists := capabilities["extendedCommunity"]; !exists {
 											issues = append(issues, fmt.Sprintf("Peer %s missing extended community capability", identifier))
 										}
 									case "large":
-										if _, exists := capabilities["largeCommunity"]; exists {
-											communityTypes = append(communityTypes, "large")
-										} else {
+										if _, exists := capabilities["largeCommunity"]; !exists {
 											issues = append(issues, fmt.Sprintf("Peer %s missing large community capability", identifier))
 										}
 									}
