@@ -54,6 +54,7 @@ func (d *GNMIDevice) Connect(ctx context.Context) error {
 	defer d.mu.Unlock()
 
 	if d.State == ConnectionStateConnected || d.State == ConnectionStateEstablished {
+		logger.Debugf("Device %s already connected", d.Config.Name)
 		return nil
 	}
 
@@ -86,18 +87,15 @@ func (d *GNMIDevice) Connect(ctx context.Context) error {
 		return fmt.Errorf("dial gNMI for %s: %w", d.Config.Name, err)
 	}
 	d.target = target
-	d.State = ConnectionStateConnected
-	d.ConnectionTime = time.Now()
-	// Transition to Established BEFORE the probe so Execute (which
-	// requires Established) can run. The probe populates Model; if it
-	// fails we keep the connection (Model just stays empty).
 	d.State = ConnectionStateEstablished
+	d.ConnectionTime = time.Now()
 
-	// Release the write lock for the probe — Execute takes RLock.
-	d.mu.Unlock()
-	result, probeErr := d.Execute(ctx, Command{Template: "show version", Format: "json"})
-	d.mu.Lock()
-
+	// Probe with `show version` to populate HardwareModel. We call the
+	// lockless executeOnTarget helper while still holding the write lock
+	// — going through the public Execute (which takes RLock) would force
+	// an unsafe unlock/relock dance around the probe. Probe failure is
+	// non-fatal: the connection stays, Model just remains empty.
+	result, probeErr := d.executeOnTarget(ctx, target, Command{Template: "show version", Format: "json"})
 	if probeErr == nil {
 		if m, ok := result.Output.(map[string]interface{}); ok {
 			if model, ok := m["modelName"].(string); ok {
@@ -143,7 +141,10 @@ func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, 
 	d.mu.RUnlock()
 
 	if target == nil {
-		return nil, fmt.Errorf("device %s has no active gNMI target", d.Config.Name)
+		// Disconnect raced with this Execute call between the RLock release
+		// and the target capture. Surface a connect-flavored error rather
+		// than a generic nil-target message.
+		return nil, fmt.Errorf("device %s: disconnected during execute", d.Config.Name)
 	}
 
 	if cmd.UseCache && d.cache != nil {
@@ -153,11 +154,28 @@ func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, 
 		}
 	}
 
+	result, err := d.executeOnTarget(ctx, target, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	if cmd.UseCache && d.cache != nil {
+		d.cache.Set(d.cacheKey(cmd), result)
+	}
+	return result, nil
+}
+
+// executeOnTarget issues a single gNMI Get against the given target,
+// without consulting d.mu, d.cache, or d.State. The caller is
+// responsible for ensuring the target is non-nil and the device is in a
+// usable state. Used by both Execute (which checks state + cache first)
+// and Connect's show-version probe (which holds the write lock).
+func (d *GNMIDevice) executeOnTarget(ctx context.Context, target *gnmitarget.Target, cmd Command) (*CommandResult, error) {
 	start := time.Now()
 	expanded := d.expandTemplate(cmd)
 
 	// Both "" and "json" map to json_ietf; only "text" requests ASCII.
-	// Task 6 (ExecuteBatch) replicates this mapping — keep them in sync.
+	// ExecuteBatch replicates this mapping — keep them in sync.
 	encoding := "json_ietf"
 	if cmd.Format == "text" {
 		encoding = "ascii"
@@ -181,17 +199,12 @@ func (d *GNMIDevice) Execute(ctx context.Context, cmd Command) (*CommandResult, 
 		return nil, fmt.Errorf("device %s: %w", d.Config.Name, err)
 	}
 
-	result := &CommandResult{
+	return &CommandResult{
 		Command:   cmd,
 		Output:    output,
 		Duration:  time.Since(start),
 		Timestamp: time.Now(),
-	}
-
-	if cmd.UseCache && d.cache != nil {
-		d.cache.Set(d.cacheKey(cmd), result)
-	}
-	return result, nil
+	}, nil
 }
 
 // extractCLIOutput pulls the first Update value out of a gNMI GetResponse
