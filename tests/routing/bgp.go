@@ -471,6 +471,48 @@ type BgpAddressFamily struct {
 	Peers          []string `yaml:"peers,omitempty" json:"peers,omitempty"`
 }
 
+// BgpRoute names a prefix and the expected number of paths/next-hops the
+// caller wants verified. Used by VerifyBGPRoutePaths and VerifyBGPRouteECMP.
+type BgpRoute struct {
+	Prefix        string `yaml:"prefix" json:"prefix"`
+	ExpectedPaths int    `yaml:"expected_paths,omitempty" json:"expected_paths,omitempty"`
+	VRF           string `yaml:"vrf,omitempty" json:"vrf,omitempty"`
+}
+
+// parseBgpRoutes reads the `routes:` list from a YAML inputs map into
+// []BgpRoute. Each entry must be a map with at least `prefix`; `vrf`
+// defaults to "default" and `expected_paths` is optional.
+func parseBgpRoutes(inputs map[string]any) ([]BgpRoute, error) {
+	if inputs == nil {
+		return nil, nil
+	}
+	raw, ok := inputs["routes"].([]any)
+	if !ok {
+		return nil, nil
+	}
+	var routes []BgpRoute
+	for i, r := range raw {
+		m, ok := r.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("routes[%d]: expected map, got %T", i, r)
+		}
+		route := BgpRoute{VRF: "default"}
+		if s, ok := m["prefix"].(string); ok {
+			route.Prefix = s
+		}
+		if v, ok := m["expected_paths"].(float64); ok {
+			route.ExpectedPaths = int(v)
+		} else if v, ok := m["expected_paths"].(int); ok {
+			route.ExpectedPaths = v
+		}
+		if s, ok := m["vrf"].(string); ok && s != "" {
+			route.VRF = s
+		}
+		routes = append(routes, route)
+	}
+	return routes, nil
+}
+
 // BgpPeerExtended represents extended BGP peer configuration
 type BgpPeerExtended struct {
 	PeerAddress           string                 `yaml:"peer_address,omitempty" json:"peer_address,omitempty"`
@@ -3446,7 +3488,7 @@ func (t *VerifyBGPNlriAcceptance) ValidateInput(input any) error {
 //           expected_paths: 3
 type VerifyBGPRoutePaths struct {
 	test.BaseTest
-	Routes []string `yaml:"routes" json:"routes"`
+	Routes []BgpRoute `yaml:"routes" json:"routes"`
 }
 
 func NewVerifyBGPRoutePaths(inputs map[string]any) (test.Test, error) {
@@ -3458,15 +3500,11 @@ func NewVerifyBGPRoutePaths(inputs map[string]any) (test.Test, error) {
 		},
 	}
 
-	if inputs != nil {
-		if routes, ok := inputs["routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.Routes = append(t.Routes, routeStr)
-				}
-			}
-		}
+	routes, err := parseBgpRoutes(inputs)
+	if err != nil {
+		return nil, err
 	}
+	t.Routes = routes
 
 	return t, nil
 }
@@ -3480,7 +3518,7 @@ func (t *VerifyBGPRoutePaths) Execute(ctx context.Context, dev device.Device) (*
 	}
 
 	cmd := device.Command{
-		Template: "show ip route bgp",
+		Template: "show ip bgp vrf all",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3488,24 +3526,43 @@ func (t *VerifyBGPRoutePaths) Execute(ctx context.Context, dev device.Device) (*
 	cmdResult, err := dev.Execute(ctx, cmd)
 	if err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to get BGP RIB: %v", err)
 		return result, nil
 	}
 
-var response struct {
-		Routes map[string]any `json:"routes"`
+	var response struct {
+		VRFs map[string]struct {
+			BgpRouteEntries map[string]struct {
+				BgpRoutePaths []any `json:"bgpRoutePaths"`
+			} `json:"bgpRouteEntries"`
+		} `json:"vrfs"`
 	}
 
 	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP routes output: %v", err)
+		result.Message = fmt.Sprintf("Failed to parse BGP RIB output: %v", err)
 		return result, nil
 	}
 
 	issues := []string{}
 	for _, route := range t.Routes {
-		if _, exists := response.Routes[route]; !exists {
-			issues = append(issues, fmt.Sprintf("BGP route %s not found", route))
+		vrfData, exists := response.VRFs[route.VRF]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not present for prefix %s", route.VRF, route.Prefix))
+			continue
+		}
+		entry, exists := vrfData.BgpRouteEntries[route.Prefix]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("BGP route %s not found in VRF %s", route.Prefix, route.VRF))
+			continue
+		}
+		got := len(entry.BgpRoutePaths)
+		switch {
+		case route.ExpectedPaths > 0 && got != route.ExpectedPaths:
+			issues = append(issues, fmt.Sprintf("BGP route %s in VRF %s: expected %d paths, got %d",
+				route.Prefix, route.VRF, route.ExpectedPaths, got))
+		case route.ExpectedPaths == 0 && got == 0:
+			issues = append(issues, fmt.Sprintf("BGP route %s in VRF %s has no paths", route.Prefix, route.VRF))
 		}
 	}
 
@@ -3519,7 +3576,17 @@ var response struct {
 	return result, nil
 }
 
-func (t *VerifyBGPRoutePaths) ValidateInput(input any) error { return nil }
+func (t *VerifyBGPRoutePaths) ValidateInput(input any) error {
+	if len(t.Routes) == 0 {
+		return fmt.Errorf("at least one route must be specified")
+	}
+	for i, r := range t.Routes {
+		if r.Prefix == "" {
+			return fmt.Errorf("routes[%d]: prefix is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPRouteECMP verifies that BGP routes have proper ECMP (Equal Cost Multi-Path) behavior.
 //
@@ -3544,7 +3611,7 @@ func (t *VerifyBGPRoutePaths) ValidateInput(input any) error { return nil }
 //           expected_paths: 2
 type VerifyBGPRouteECMP struct {
 	test.BaseTest
-	Routes []string `yaml:"routes" json:"routes"`
+	Routes []BgpRoute `yaml:"routes" json:"routes"`
 }
 
 func NewVerifyBGPRouteECMP(inputs map[string]any) (test.Test, error) {
@@ -3556,15 +3623,11 @@ func NewVerifyBGPRouteECMP(inputs map[string]any) (test.Test, error) {
 		},
 	}
 
-	if inputs != nil {
-		if routes, ok := inputs["routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.Routes = append(t.Routes, routeStr)
-				}
-			}
-		}
+	routes, err := parseBgpRoutes(inputs)
+	if err != nil {
+		return nil, err
 	}
+	t.Routes = routes
 
 	return t, nil
 }
@@ -3577,40 +3640,66 @@ func (t *VerifyBGPRouteECMP) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show ip route bgp detail",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP route details: %v", err)
-		return result, nil
-	}
-
-var response struct {
-		Routes map[string]struct {
-			NextHops []any `json:"nextHops"`
-		} `json:"routes"`
-	}
-
-	if err := decodeOutput(cmdResult.Output, &response); err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP route details: %v", err)
-		return result, nil
+	// Group routes by VRF so we issue one `show ip route vrf X bgp detail`
+	// per VRF rather than per route. `show ip route bgp detail vrf all` is
+	// rejected by EOS, so default VRF and named VRFs share the same form.
+	byVRF := map[string][]BgpRoute{}
+	for _, r := range t.Routes {
+		byVRF[r.VRF] = append(byVRF[r.VRF], r)
 	}
 
 	issues := []string{}
-	for _, route := range t.Routes {
-		if routeData, exists := response.Routes[route]; exists {
-			if len(routeData.NextHops) < 2 {
-				issues = append(issues, fmt.Sprintf("Route %s has only %d next hop(s), expected ECMP with multiple paths",
-					route, len(routeData.NextHops)))
+	for vrf, routes := range byVRF {
+		cmd := device.Command{
+			Template: fmt.Sprintf("show ip route vrf %s bgp detail", vrf),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP route details for VRF %s: %v", vrf, err)
+			return result, nil
+		}
+
+		var response struct {
+			VRFs map[string]struct {
+				Routes map[string]struct {
+					Vias []any `json:"vias"`
+				} `json:"routes"`
+			} `json:"vrfs"`
+		}
+
+		if err := decodeOutput(cmdResult.Output, &response); err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to parse BGP route details for VRF %s: %v", vrf, err)
+			return result, nil
+		}
+
+		vrfData, exists := response.VRFs[vrf]
+		if !exists {
+			for _, route := range routes {
+				issues = append(issues, fmt.Sprintf("VRF %s not present for prefix %s", vrf, route.Prefix))
 			}
-		} else {
-			issues = append(issues, fmt.Sprintf("BGP route %s not found", route))
+			continue
+		}
+
+		for _, route := range routes {
+			entry, exists := vrfData.Routes[route.Prefix]
+			if !exists {
+				issues = append(issues, fmt.Sprintf("BGP route %s not found in VRF %s", route.Prefix, vrf))
+				continue
+			}
+			got := len(entry.Vias)
+			switch {
+			case route.ExpectedPaths > 0 && got != route.ExpectedPaths:
+				issues = append(issues, fmt.Sprintf("Route %s in VRF %s: expected %d ECMP next-hops, got %d",
+					route.Prefix, vrf, route.ExpectedPaths, got))
+			case route.ExpectedPaths == 0 && got < 2:
+				issues = append(issues, fmt.Sprintf("Route %s in VRF %s has only %d next-hop(s), expected ECMP",
+					route.Prefix, vrf, got))
+			}
 		}
 	}
 
@@ -3624,7 +3713,17 @@ var response struct {
 	return result, nil
 }
 
-func (t *VerifyBGPRouteECMP) ValidateInput(input any) error { return nil }
+func (t *VerifyBGPRouteECMP) ValidateInput(input any) error {
+	if len(t.Routes) == 0 {
+		return fmt.Errorf("at least one route must be specified")
+	}
+	for i, r := range t.Routes {
+		if r.Prefix == "" {
+			return fmt.Errorf("routes[%d]: prefix is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPRedistribution verifies that route redistribution into BGP is working correctly.
 //
