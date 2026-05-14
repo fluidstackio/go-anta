@@ -140,8 +140,8 @@ func (t *VerifyVxlan1ConnSettings) ValidateInput(input any) error {
 		return fmt.Errorf("either source_interface or udp_port must be specified")
 	}
 
-	if t.UdpPort != 0 && (t.UdpPort < 1024 || t.UdpPort > 65335) {
-		return fmt.Errorf("udp_port must be between 1024 and 65335")
+	if t.UdpPort != 0 && (t.UdpPort < 1024 || t.UdpPort > 65535) {
+		return fmt.Errorf("udp_port must be between 1024 and 65535")
 	}
 
 	return nil
