@@ -486,6 +486,8 @@ type BgpPeerExtended struct {
 	WarningLimit          int                    `yaml:"warning_limit,omitempty" json:"warning_limit,omitempty"`
 	PeerGroup             string                 `yaml:"peer_group,omitempty" json:"peer_group,omitempty"`
 	TTL                   int                    `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+	ExpectedTTL           int                    `yaml:"expected_ttl,omitempty" json:"expected_ttl,omitempty"`
+	MaxHops               int                    `yaml:"max_hops,omitempty" json:"max_hops,omitempty"`
 	DropStats             map[string]int         `yaml:"drop_stats,omitempty" json:"drop_stats,omitempty"`
 	UpdateErrors          map[string]any `yaml:"update_errors,omitempty" json:"update_errors,omitempty"`
 	InboundRouteMap       string                 `yaml:"inbound_route_map,omitempty" json:"inbound_route_map,omitempty"`
@@ -3767,19 +3769,28 @@ func NewVerifyBGPPeerTtlMultiHops(inputs map[string]any) (test.Test, error) {
 	if inputs != nil {
 		if peers, ok := inputs["bgp_peers"].([]any); ok {
 			for _, p := range peers {
-				if peerMap, ok := p.(map[string]any); ok {
-					peer := BgpPeerExtended{VRF: "default"}
-					if addr, ok := peerMap["peer_address"].(string); ok {
-						peer.PeerAddress = addr
-					}
-					if vrf, ok := peerMap["vrf"].(string); ok {
-						peer.VRF = vrf
-					}
-					if ttl, ok := peerMap["ttl"].(int); ok {
-						peer.TTL = ttl
-					}
-					t.BGPPeers = append(t.BGPPeers, peer)
+				peerMap, ok := p.(map[string]any)
+				if !ok {
+					continue
 				}
+				peer := BgpPeerExtended{VRF: "default"}
+				if addr, ok := peerMap["peer_address"].(string); ok {
+					peer.PeerAddress = addr
+				}
+				if vrf, ok := peerMap["vrf"].(string); ok {
+					peer.VRF = vrf
+				}
+				if v, ok := peerMap["expected_ttl"].(float64); ok {
+					peer.ExpectedTTL = int(v)
+				} else if v, ok := peerMap["expected_ttl"].(int); ok {
+					peer.ExpectedTTL = v
+				}
+				if v, ok := peerMap["max_hops"].(float64); ok {
+					peer.MaxHops = int(v)
+				} else if v, ok := peerMap["max_hops"].(int); ok {
+					peer.MaxHops = v
+				}
+				t.BGPPeers = append(t.BGPPeers, peer)
 			}
 		}
 	}
@@ -3796,7 +3807,7 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 	}
 
 	cmd := device.Command{
-		Template: "show bgp neighbors",
+		Template: "show bgp neighbors vrf all",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3808,11 +3819,13 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
-			Neighbors map[string]struct {
-				EbgpMultihop int `json:"ebgpMultihop"`
-			} `json:"neighbors"`
+			PeerList []struct {
+				PeerAddress string `json:"peerAddress"`
+				TTL         int    `json:"ttl"`
+				MaxTtlHops  int    `json:"maxTtlHops"`
+			} `json:"peerList"`
 		} `json:"vrfs"`
 	}
 
@@ -3832,22 +3845,33 @@ var response struct {
 
 		vrfData, exists := response.VRFs[vrf]
 		if !exists {
-			issues = append(issues, fmt.Sprintf("VRF %s not found", vrf))
+			issues = append(issues, fmt.Sprintf("VRF %s not found for peer %s", vrf, peer.PeerAddress))
 			continue
 		}
 
-		neighbor, exists := vrfData.Neighbors[peer.PeerAddress]
-		if !exists {
+		var match *struct {
+			PeerAddress string `json:"peerAddress"`
+			TTL         int    `json:"ttl"`
+			MaxTtlHops  int    `json:"maxTtlHops"`
+		}
+		for i := range vrfData.PeerList {
+			if vrfData.PeerList[i].PeerAddress == peer.PeerAddress {
+				match = &vrfData.PeerList[i]
+				break
+			}
+		}
+		if match == nil {
 			issues = append(issues, fmt.Sprintf("BGP peer %s not found in VRF %s", peer.PeerAddress, vrf))
 			continue
 		}
 
-		// Check TTL multihop if specified
-		if peer.TTL > 0 {
-			if neighbor.EbgpMultihop != peer.TTL {
-				issues = append(issues, fmt.Sprintf("Peer %s TTL multihop mismatch: expected %d, got %d",
-					peer.PeerAddress, peer.TTL, neighbor.EbgpMultihop))
-			}
+		if peer.ExpectedTTL > 0 && match.TTL != peer.ExpectedTTL {
+			issues = append(issues, fmt.Sprintf("Peer %s in VRF %s: expected TTL %d, got %d",
+				peer.PeerAddress, vrf, peer.ExpectedTTL, match.TTL))
+		}
+		if peer.MaxHops > 0 && match.MaxTtlHops != peer.MaxHops {
+			issues = append(issues, fmt.Sprintf("Peer %s in VRF %s: expected max_hops %d, got %d",
+				peer.PeerAddress, vrf, peer.MaxHops, match.MaxTtlHops))
 		}
 	}
 
@@ -3862,5 +3886,16 @@ var response struct {
 }
 
 func (t *VerifyBGPPeerTtlMultiHops) ValidateInput(input any) error {
+	if len(t.BGPPeers) == 0 {
+		return fmt.Errorf("at least one BGP peer must be specified")
+	}
+	for i, peer := range t.BGPPeers {
+		if peer.PeerAddress == "" {
+			return fmt.Errorf("bgp_peers[%d]: peer_address is required", i)
+		}
+		if peer.ExpectedTTL == 0 && peer.MaxHops == 0 {
+			return fmt.Errorf("bgp_peers[%d] (%s): at least one of expected_ttl or max_hops must be set", i, peer.PeerAddress)
+		}
+	}
 	return nil
 }
