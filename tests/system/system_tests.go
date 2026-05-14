@@ -398,7 +398,11 @@ func (t *VerifyNTP) Execute(ctx context.Context, dev device.Device) (*test.TestR
 	for _, expectedServer := range t.Servers {
 		found := false
 		for addr, assoc := range ntpServers {
-			if strings.Contains(addr, expectedServer.Server) || strings.Contains(expectedServer.Server, addr) {
+			// Exact match. The previous bidirectional strings.Contains
+			// let 10.1.1.1 match 10.1.1.10 (and vice versa), producing
+			// false positives. EOS returns the NTP server exactly as
+			// configured, so equality is the right comparison.
+			if addr == expectedServer.Server {
 				found = true
 
 				isSynchronized := strings.Contains(assoc.Condition, "sys.peer") ||

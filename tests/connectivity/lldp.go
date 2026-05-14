@@ -153,12 +153,12 @@ func (t *VerifyLLDPNeighbors) Execute(ctx context.Context, dev device.Device) (*
 			continue
 		}
 
-		if intf.NeighborDevice != "" && !strings.Contains(strings.ToLower(neighbor.SystemName), strings.ToLower(intf.NeighborDevice)) {
+		if intf.NeighborDevice != "" && !lldpHostMatches(neighbor.SystemName, intf.NeighborDevice) {
 			failures = append(failures, fmt.Sprintf("%s: expected neighbor %s, got %s",
 				intf.Interface, intf.NeighborDevice, neighbor.SystemName))
 		}
 
-		if intf.NeighborPort != "" && !strings.Contains(neighbor.PortDesc, intf.NeighborPort) {
+		if intf.NeighborPort != "" && !strings.EqualFold(neighbor.PortDesc, intf.NeighborPort) {
 			failures = append(failures, fmt.Sprintf("%s: expected neighbor port %s, got %s",
 				intf.Interface, intf.NeighborPort, neighbor.PortDesc))
 		}
@@ -191,4 +191,21 @@ type LLDPNeighborInfo struct {
 	SystemName string
 	PortDesc   string
 	ChassisId  string
+}
+
+// lldpHostMatches compares an LLDP-reported system name to the user's
+// expected hostname. Match is case-insensitive and tolerates an FQDN
+// on either side: "spine1" matches "spine1.dc.example.com" and vice
+// versa. The previous strings.Contains let "spine1" match "spine100".
+func lldpHostMatches(systemName, expected string) bool {
+	if strings.EqualFold(systemName, expected) {
+		return true
+	}
+	leftLabel := func(s string) string {
+		if i := strings.IndexByte(s, '.'); i >= 0 {
+			return s[:i]
+		}
+		return s
+	}
+	return strings.EqualFold(leftLabel(systemName), leftLabel(expected))
 }
