@@ -3746,9 +3746,17 @@ func (t *VerifyBGPRouteECMP) ValidateInput(input any) error {
 //           vrf: "default"
 //         - source_protocol: "static"
 //           expected_count: 5
+// BgpRedistribution names a source routing protocol expected to be
+// redistributed into BGP for a given VRF.
+type BgpRedistribution struct {
+	SourceProtocol string `yaml:"source_protocol" json:"source_protocol"`
+	ExpectedCount  int    `yaml:"expected_count,omitempty" json:"expected_count,omitempty"`
+	VRF            string `yaml:"vrf,omitempty" json:"vrf,omitempty"`
+}
+
 type VerifyBGPRedistribution struct {
 	test.BaseTest
-	RedistributedRoutes []string `yaml:"redistributed_routes" json:"redistributed_routes"`
+	RedistributedRoutes []BgpRedistribution `yaml:"redistributed_routes" json:"redistributed_routes"`
 }
 
 func NewVerifyBGPRedistribution(inputs map[string]any) (test.Test, error) {
@@ -3761,11 +3769,26 @@ func NewVerifyBGPRedistribution(inputs map[string]any) (test.Test, error) {
 	}
 
 	if inputs != nil {
-		if routes, ok := inputs["redistributed_routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.RedistributedRoutes = append(t.RedistributedRoutes, routeStr)
+		raw, ok := inputs["redistributed_routes"].([]any)
+		if ok {
+			for i, r := range raw {
+				m, ok := r.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("redistributed_routes[%d]: expected map, got %T", i, r)
 				}
+				entry := BgpRedistribution{VRF: "default"}
+				if s, ok := m["source_protocol"].(string); ok {
+					entry.SourceProtocol = s
+				}
+				if v, ok := m["expected_count"].(float64); ok {
+					entry.ExpectedCount = int(v)
+				} else if v, ok := m["expected_count"].(int); ok {
+					entry.ExpectedCount = v
+				}
+				if s, ok := m["vrf"].(string); ok && s != "" {
+					entry.VRF = s
+				}
+				t.RedistributedRoutes = append(t.RedistributedRoutes, entry)
 			}
 		}
 	}
@@ -3781,8 +3804,14 @@ func (t *VerifyBGPRedistribution) Execute(ctx context.Context, dev device.Device
 		Categories: t.Categories(),
 	}
 
+	// `show bgp instance` exposes the configured redistribution sources
+	// for every AF in every VRF — exactly what determines whether a
+	// protocol is being redistributed into BGP. The old code queried
+	// `show ip route bgp` and pattern-matched routeType against "BGP",
+	// but every entry there has routeType "eBGP"/"iBGP" so the check
+	// was vacuously false — silent PASS.
 	cmd := device.Command{
-		Template: "show ip route bgp",
+		Template: "show bgp instance",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3790,32 +3819,69 @@ func (t *VerifyBGPRedistribution) Execute(ctx context.Context, dev device.Device
 	cmdResult, err := dev.Execute(ctx, cmd)
 	if err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP redistributed routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to get BGP instance config: %v", err)
 		return result, nil
 	}
 
-var response struct {
-		Routes map[string]struct {
-			RouteType string `json:"routeType"`
-		} `json:"routes"`
+	var response struct {
+		VRFs map[string]struct {
+			AfiSafiConfig map[string]struct {
+				RedistributedRoutes []struct {
+					Proto    string `json:"proto"`
+					RouteMap string `json:"routeMap,omitempty"`
+				} `json:"redistributedRoutes"`
+			} `json:"afiSafiConfig"`
+		} `json:"vrfs"`
 	}
 
 	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to parse BGP instance output: %v", err)
 		return result, nil
 	}
 
 	issues := []string{}
-	for _, route := range t.RedistributedRoutes {
-		if routeData, exists := response.Routes[route]; exists {
-			// Check if route is redistributed (not learned from BGP peer)
-			if routeData.RouteType == "BGP" {
-				// This is a normal BGP route, not redistributed
-				issues = append(issues, fmt.Sprintf("Route %s appears to be learned via BGP, not redistributed", route))
+	for _, entry := range t.RedistributedRoutes {
+		vrfData, exists := response.VRFs[entry.VRF]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not present in BGP instance", entry.VRF))
+			continue
+		}
+
+		// Walk every AF's redistribution list looking for a case-insensitive
+		// match. The test schema doesn't pin AF, so this is the most lenient
+		// reading — "is this protocol redistributed *somewhere* in this VRF".
+		found := false
+		for _, af := range vrfData.AfiSafiConfig {
+			for _, r := range af.RedistributedRoutes {
+				if strings.EqualFold(r.Proto, entry.SourceProtocol) {
+					found = true
+					break
+				}
 			}
-		} else {
-			issues = append(issues, fmt.Sprintf("Redistributed route %s not found in BGP table", route))
+			if found {
+				break
+			}
+		}
+		if !found {
+			issues = append(issues, fmt.Sprintf("source protocol %q not configured for redistribution in VRF %s",
+				entry.SourceProtocol, entry.VRF))
+			continue
+		}
+
+		if entry.ExpectedCount > 0 {
+			count, err := countRoutesByProto(ctx, dev, entry.SourceProtocol, entry.VRF)
+			if err != nil {
+				// Don't fail the test because the upper-bound count check
+				// couldn't run; the config check above is the primary signal.
+				issues = append(issues, fmt.Sprintf("source protocol %q in VRF %s: redistribution configured, but RIB count check skipped (%v)",
+					entry.SourceProtocol, entry.VRF, err))
+				continue
+			}
+			if count < entry.ExpectedCount {
+				issues = append(issues, fmt.Sprintf("source protocol %q in VRF %s: expected at least %d routes in RIB, found %d",
+					entry.SourceProtocol, entry.VRF, entry.ExpectedCount, count))
+			}
 		}
 	}
 
@@ -3823,13 +3889,52 @@ var response struct {
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("BGP redistribution validation failed: %s", strings.Join(issues, "; "))
 	} else {
-		result.Message = fmt.Sprintf("All BGP redistributed routes verified (%d routes)", len(t.RedistributedRoutes))
+		result.Message = fmt.Sprintf("All BGP redistribution sources verified (%d entries)", len(t.RedistributedRoutes))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyBGPRedistribution) ValidateInput(input any) error { return nil }
+// countRoutesByProto returns the number of IPv4 routes in `vrf` whose
+// source is `proto`. The expected_count check is an upper bound — a
+// protocol may have N RIB routes but only some subset gets redistributed
+// into BGP via route-maps. We use this to flag the obvious case where
+// the RIB itself doesn't have enough routes to satisfy the expectation.
+func countRoutesByProto(ctx context.Context, dev device.Device, proto, vrf string) (int, error) {
+	cmd := device.Command{
+		Template: fmt.Sprintf("show ip route vrf %s %s", vrf, strings.ToLower(proto)),
+		Format:   "json",
+		UseCache: false,
+	}
+	res, err := dev.Execute(ctx, cmd)
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		VRFs map[string]struct {
+			Routes map[string]any `json:"routes"`
+		} `json:"vrfs"`
+	}
+	if err := decodeOutput(res.Output, &resp); err != nil {
+		return 0, err
+	}
+	if v, ok := resp.VRFs[vrf]; ok {
+		return len(v.Routes), nil
+	}
+	return 0, nil
+}
+
+func (t *VerifyBGPRedistribution) ValidateInput(input any) error {
+	if len(t.RedistributedRoutes) == 0 {
+		return fmt.Errorf("at least one redistributed_routes entry must be specified")
+	}
+	for i, r := range t.RedistributedRoutes {
+		if r.SourceProtocol == "" {
+			return fmt.Errorf("redistributed_routes[%d]: source_protocol is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPPeerTtlMultiHops verifies TTL security and multi-hop BGP peer configurations.
 //
