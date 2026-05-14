@@ -115,7 +115,12 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 
 	if t.MinimumMemory > 0 {
 		if memTotal, ok := versionData["memTotal"].(float64); ok {
-			memTotalMB := int64(memTotal / 1024 / 1024)
+			// EOS reports memTotal in kilobytes (`/proc/meminfo` convention),
+			// not bytes. Dividing by 1024 twice (the previous behaviour)
+			// reported memory ~1024× smaller than reality — a 64 GB switch
+			// looked like a 62 MB switch and any reasonable MinimumMemory
+			// threshold failed.
+			memTotalMB := int64(memTotal / 1024)
 			if memTotalMB < t.MinimumMemory {
 				issues = append(issues, fmt.Sprintf("Insufficient memory: %d MB < %d MB required",
 					memTotalMB, t.MinimumMemory))
@@ -124,12 +129,46 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 	}
 
 	if t.MinimumFlash > 0 {
-		if flashSize, ok := versionData["flashSize"].(float64); ok {
-			flashSizeMB := int64(flashSize / 1024 / 1024)
-			if flashSizeMB < t.MinimumFlash {
-				issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
-					flashSizeMB, t.MinimumFlash))
+		// `show version` does not expose flashSize on most modern EOS
+		// platforms. Read it from `show file systems` and find the
+		// `flash:` filesystem. Sizes there are reported in 1K blocks.
+		fsCmd := device.Command{
+			Template: "show file systems",
+			Format:   "json",
+			UseCache: true,
+		}
+		fsResult, err := dev.Execute(ctx, fsCmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get file system info: %v", err)
+			return result, nil
+		}
+		fsData, err := test.AsMap(fsResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected file systems output: %v", err)
+			return result, nil
+		}
+		var flashSizeMB int64 = -1
+		if entries, ok := fsData["fileSystems"].([]any); ok {
+			for _, e := range entries {
+				entry, ok := e.(map[string]any)
+				if !ok {
+					continue
+				}
+				if prefix, _ := entry["prefix"].(string); prefix == "flash:" {
+					if size, ok := entry["size"].(float64); ok {
+						flashSizeMB = int64(size / 1024)
+					}
+					break
+				}
 			}
+		}
+		if flashSizeMB < 0 {
+			issues = append(issues, "flash: filesystem not found in `show file systems`")
+		} else if flashSizeMB < t.MinimumFlash {
+			issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
+				flashSizeMB, t.MinimumFlash))
 		}
 	}
 
