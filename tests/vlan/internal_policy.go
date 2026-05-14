@@ -91,7 +91,13 @@ func (t *VerifyVlanInternalPolicy) Execute(ctx context.Context, dev device.Devic
 
 	issues := []string{}
 
-	if vlanData, ok := cmdResult.Output.(map[string]any); ok {
+	vlanData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected VLAN internal-usage output: %v", err)
+		return result, nil
+	}
+	{
 		// Check internal VLAN policy
 		if policy, ok := vlanData["internalVlanPolicy"].(string); ok {
 			if policy != t.Policy {

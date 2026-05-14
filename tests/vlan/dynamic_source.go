@@ -85,7 +85,13 @@ func (t *VerifyDynamicVlanSource) Execute(ctx context.Context, dev device.Device
 	issues := []string{}
 	foundSources := make(map[string]bool)
 
-	if dynamicData, ok := cmdResult.Output.(map[string]any); ok {
+	dynamicData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected dynamic VLAN output: %v", err)
+		return result, nil
+	}
+	{
 		// Check for dynamic VLAN sources
 		if sources, ok := dynamicData["dynamicVlanSources"].([]any); ok {
 			for _, source := range sources {
