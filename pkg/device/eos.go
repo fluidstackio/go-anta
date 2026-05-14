@@ -106,7 +106,7 @@ func (d *EOSDevice) Connect(ctx context.Context) error {
 	if err != nil {
 		d.State = ConnectionStateError
 		logger.Errorf("Failed to connect to %s: %v", d.Config.Name, err)
-		return fmt.Errorf("failed to connect to %s: %w", d.Config.Host, err)
+		return fmt.Errorf("failed to connect to %s: %w", d.Config.Name, err)
 	}
 
 	d.State = ConnectionStateConnected
@@ -130,6 +130,7 @@ func (d *EOSDevice) Disconnect() error {
 	d.State = ConnectionStateClosed
 	if d.cache != nil {
 		d.cache.Clear()
+		d.cache.Stop()
 	}
 	if d.client != nil {
 		d.client.CloseIdleConnections()

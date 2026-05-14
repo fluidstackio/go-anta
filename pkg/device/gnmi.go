@@ -117,6 +117,7 @@ func (d *GNMIDevice) Disconnect() error {
 	d.State = ConnectionStateClosed
 	if d.cache != nil {
 		d.cache.Clear()
+		d.cache.Stop()
 	}
 	if d.target != nil {
 		_ = d.target.Close()

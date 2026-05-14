@@ -17,12 +17,18 @@ import (
 // preventing runaway memory growth from misconfigured or reversed ranges.
 const maxRangeSize = 65536
 
+// Inventory is the result type returned by every Source.Load. Devices
+// is the canonical device list; Networks and Ranges are static-YAML
+// constructs that get expanded into Devices during FileSource.Load.
 type Inventory struct {
 	Devices  []device.DeviceConfig `yaml:"devices" json:"devices"`
 	Networks []NetworkDefinition   `yaml:"networks,omitempty" json:"networks,omitempty"`
-	Ranges   []RangeDefinition    `yaml:"ranges,omitempty" json:"ranges,omitempty"`
+	Ranges   []RangeDefinition     `yaml:"ranges,omitempty" json:"ranges,omitempty"`
 }
 
+// NetworkDefinition is a CIDR expanded into one DeviceConfig per host
+// IP at static-YAML load time, with the listed credentials and tags
+// applied to each generated entry.
 type NetworkDefinition struct {
 	Network        string   `yaml:"network" json:"network"`
 	Username       string   `yaml:"username" json:"username"`
@@ -42,6 +48,9 @@ func (n NetworkDefinition) String() string {
 
 func (n NetworkDefinition) GoString() string { return n.String() }
 
+// RangeDefinition is an inclusive Start..End IP range expanded into one
+// DeviceConfig per address at static-YAML load time. Capped at
+// maxRangeSize entries to prevent runaway expansion.
 type RangeDefinition struct {
 	Start          string   `yaml:"start" json:"start"`
 	End            string   `yaml:"end" json:"end"`

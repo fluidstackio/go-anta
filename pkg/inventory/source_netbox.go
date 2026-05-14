@@ -21,8 +21,12 @@ type NetboxSource struct {
 	defaults DeviceDefaults
 }
 
+// Kind returns the registered source kind "netbox".
 func (s *NetboxSource) Kind() string { return "netbox" }
 
+// Load queries Netbox and returns the resulting Inventory. Credentials
+// are NOT populated on the returned devices; the caller is expected to
+// run Inventory.ApplyDefaults afterward.
 func (s *NetboxSource) Load(ctx context.Context) (*Inventory, error) {
 	client := NewNetboxClient(s.config)
 	devices, err := client.GetDevices(ctx, s.query)

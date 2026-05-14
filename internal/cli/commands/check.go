@@ -86,7 +86,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load inventory: %w", err)
 	}
 
 	if checkTags != "" {
