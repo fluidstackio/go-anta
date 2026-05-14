@@ -195,19 +195,32 @@ func (t *VerifySTPBlockedPorts) Execute(ctx context.Context, dev device.Device) 
 	issues := []string{}
 	blockedPorts := []string{}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if instances, ok := stpData["spanningTreeInstances"].([]interface{}); ok {
-			for _, instance := range instances {
-				if inst, ok := instance.(map[string]interface{}); ok {
-					if interfaces, ok := inst["interfaces"].(map[string]interface{}); ok {
-						for intfName, intfData := range interfaces {
-							if intf, ok := intfData.(map[string]interface{}); ok {
-								if state, ok := intf["state"].(string); ok && strings.ToLower(state) == "blocking" {
-									blockedPorts = append(blockedPorts, intfName)
-								}
-							}
-						}
-					}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP blocked-ports output: %v", err)
+		return result, nil
+	}
+	// `show spanning-tree blockedports` returns spanningTreeInstances as a
+	// map keyed by instance label, not a slice. Walking it as a map keeps
+	// the blocked-port detection working when any instance has one.
+	if instances, ok := stpData["spanningTreeInstances"].(map[string]interface{}); ok {
+		for _, instance := range instances {
+			inst, ok := instance.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			interfaces, ok := inst["interfaces"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for intfName, intfData := range interfaces {
+				intf, ok := intfData.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if state, ok := intf["state"].(string); ok && strings.ToLower(state) == "blocking" {
+					blockedPorts = append(blockedPorts, intfName)
 				}
 			}
 		}
@@ -288,30 +301,33 @@ func (t *VerifySTPCounters) Execute(ctx context.Context, dev device.Device) (*te
 
 	issues := []string{}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if interfaces, ok := stpData["interfaces"].(map[string]interface{}); ok {
-			for intfName, intfData := range interfaces {
-				// Skip ignored interfaces
-				if contains(t.IgnoredInterfaces, intfName) {
-					continue
-				}
-
-				// Check only specific interfaces if provided
-				if len(t.Interfaces) > 0 && !contains(t.Interfaces, intfName) {
-					continue
-				}
-
-				if intf, ok := intfData.(map[string]interface{}); ok {
-					if counters, ok := intf["counters"].(map[string]interface{}); ok {
-						// Check for BPDU errors
-						if bpduErrors, ok := counters["bpduTaggedOther"].(float64); ok && bpduErrors > 0 {
-							issues = append(issues, fmt.Sprintf("Interface %s has %g BPDU errors", intfName, bpduErrors))
-						}
-						if bpduInvalid, ok := counters["invalidBpdus"].(float64); ok && bpduInvalid > 0 {
-							issues = append(issues, fmt.Sprintf("Interface %s has %g invalid BPDUs", intfName, bpduInvalid))
-						}
-					}
-				}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP counters output: %v", err)
+		return result, nil
+	}
+	if interfaces, ok := stpData["interfaces"].(map[string]interface{}); ok {
+		for intfName, intfData := range interfaces {
+			if contains(t.IgnoredInterfaces, intfName) {
+				continue
+			}
+			if len(t.Interfaces) > 0 && !contains(t.Interfaces, intfName) {
+				continue
+			}
+			intf, ok := intfData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			counters, ok := intf["counters"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if bpduErrors, ok := counters["bpduTaggedOther"].(float64); ok && bpduErrors > 0 {
+				issues = append(issues, fmt.Sprintf("Interface %s has %g BPDU errors", intfName, bpduErrors))
+			}
+			if bpduInvalid, ok := counters["invalidBpdus"].(float64); ok && bpduInvalid > 0 {
+				issues = append(issues, fmt.Sprintf("Interface %s has %g invalid BPDUs", intfName, bpduInvalid))
 			}
 		}
 	}
@@ -381,23 +397,37 @@ func (t *VerifySTPForwardingPorts) Execute(ctx context.Context, dev device.Devic
 
 	issues := []string{}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if instances, ok := stpData["instances"].(map[string]interface{}); ok {
-			for _, vlanID := range t.Vlans {
-				vlanStr := fmt.Sprintf("%d", vlanID)
-				if instance, ok := instances[vlanStr].(map[string]interface{}); ok {
-					if interfaces, ok := instance["interfaces"].(map[string]interface{}); ok {
-						for intfName, intfData := range interfaces {
-							if intf, ok := intfData.(map[string]interface{}); ok {
-								if state, ok := intf["state"].(string); ok {
-									if strings.ToLower(state) != "forwarding" {
-										issues = append(issues, fmt.Sprintf("Interface %s in VLAN %d is in '%s' state, expected 'forwarding'", intfName, vlanID, state))
-									}
-								}
-							}
-						}
-					}
-				}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP output: %v", err)
+		return result, nil
+	}
+	// EOS returns instances under `spanningTreeInstances` keyed by label
+	// ("VL10"), not under `instances` keyed by raw VLAN id.
+	instances, ok := stpData["spanningTreeInstances"].(map[string]interface{})
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "STP output missing 'spanningTreeInstances'"
+		return result, nil
+	}
+	for _, vlanID := range t.Vlans {
+		instance, ok := instances[fmt.Sprintf("VL%d", vlanID)].(map[string]interface{})
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VLAN %d not found in STP instances", vlanID))
+			continue
+		}
+		interfaces, ok := instance["interfaces"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for intfName, intfData := range interfaces {
+			intf, ok := intfData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if state, ok := intf["state"].(string); ok && strings.ToLower(state) != "forwarding" {
+				issues = append(issues, fmt.Sprintf("Interface %s in VLAN %d is in '%s' state, expected 'forwarding'", intfName, vlanID, state))
 			}
 		}
 	}
@@ -477,34 +507,47 @@ func (t *VerifySTPRootPriority) Execute(ctx context.Context, dev device.Device) 
 
 	issues := []string{}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if instances, ok := stpData["instances"].(map[string]interface{}); ok {
-			if len(t.Instances) > 0 {
-				for _, instanceID := range t.Instances {
-					instanceStr := fmt.Sprintf("%d", instanceID)
-					if instance, ok := instances[instanceStr].(map[string]interface{}); ok {
-						if rootBridge, ok := instance["rootBridge"].(map[string]interface{}); ok {
-							if priority, ok := rootBridge["priority"].(float64); ok {
-								if int(priority) != t.Priority {
-									issues = append(issues, fmt.Sprintf("Instance %d root priority is %d, expected %d", instanceID, int(priority), t.Priority))
-								}
-							}
-						}
-					}
-				}
-			} else {
-				// Check all instances if none specified
-				for instanceStr, instanceData := range instances {
-					if instance, ok := instanceData.(map[string]interface{}); ok {
-						if rootBridge, ok := instance["rootBridge"].(map[string]interface{}); ok {
-							if priority, ok := rootBridge["priority"].(float64); ok {
-								if int(priority) != t.Priority {
-									issues = append(issues, fmt.Sprintf("Instance %s root priority is %d, expected %d", instanceStr, int(priority), t.Priority))
-								}
-							}
-						}
-					}
-				}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP output: %v", err)
+		return result, nil
+	}
+	instances, ok := stpData["spanningTreeInstances"].(map[string]interface{})
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "STP output missing 'spanningTreeInstances'"
+		return result, nil
+	}
+
+	check := func(label string, instance map[string]interface{}) {
+		rootBridge, ok := instance["rootBridge"].(map[string]interface{})
+		if !ok {
+			return
+		}
+		priority, ok := rootBridge["priority"].(float64)
+		if !ok {
+			return
+		}
+		if int(priority) != t.Priority {
+			issues = append(issues, fmt.Sprintf("Instance %s root priority is %d, expected %d", label, int(priority), t.Priority))
+		}
+	}
+
+	if len(t.Instances) > 0 {
+		for _, instanceID := range t.Instances {
+			label := fmt.Sprintf("VL%d", instanceID)
+			instance, ok := instances[label].(map[string]interface{})
+			if !ok {
+				issues = append(issues, fmt.Sprintf("Instance %s not found", label))
+				continue
+			}
+			check(label, instance)
+		}
+	} else {
+		for label, raw := range instances {
+			if instance, ok := raw.(map[string]interface{}); ok {
+				check(label, instance)
 			}
 		}
 	}
@@ -575,18 +618,26 @@ func (t *VerifyStpTopologyChanges) Execute(ctx context.Context, dev device.Devic
 	issues := []string{}
 	totalChanges := 0
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if interfaces, ok := stpData["interfaces"].(map[string]interface{}); ok {
-			for intfName, intfData := range interfaces {
-				if intf, ok := intfData.(map[string]interface{}); ok {
-					if counters, ok := intf["counters"].(map[string]interface{}); ok {
-						if changes, ok := counters["topologyChanges"].(float64); ok {
-							totalChanges += int(changes)
-							if int(changes) > t.Threshold {
-								issues = append(issues, fmt.Sprintf("Interface %s has %d topology changes (threshold: %d)", intfName, int(changes), t.Threshold))
-							}
-						}
-					}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP counters output: %v", err)
+		return result, nil
+	}
+	if interfaces, ok := stpData["interfaces"].(map[string]interface{}); ok {
+		for intfName, intfData := range interfaces {
+			intf, ok := intfData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			counters, ok := intf["counters"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if changes, ok := counters["topologyChanges"].(float64); ok {
+				totalChanges += int(changes)
+				if int(changes) > t.Threshold {
+					issues = append(issues, fmt.Sprintf("Interface %s has %d topology changes (threshold: %d)", intfName, int(changes), t.Threshold))
 				}
 			}
 		}
@@ -664,17 +715,21 @@ func (t *VerifySTPDisabledVlans) Execute(ctx context.Context, dev device.Device)
 
 	issues := []string{}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		// Check if STP is disabled for specified VLANs
-		for _, vlanID := range t.Vlans {
-			vlanStr := fmt.Sprintf("%d", vlanID)
-
-			// Check if VLAN exists in instances (if it does, STP is enabled)
-			if instances, ok := stpData["instances"].(map[string]interface{}); ok {
-				if _, exists := instances[vlanStr]; exists {
-					issues = append(issues, fmt.Sprintf("VLAN %d has STP enabled, expected disabled", vlanID))
-				}
-			}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP output: %v", err)
+		return result, nil
+	}
+	instances, ok := stpData["spanningTreeInstances"].(map[string]interface{})
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "STP output missing 'spanningTreeInstances'"
+		return result, nil
+	}
+	for _, vlanID := range t.Vlans {
+		if _, exists := instances[fmt.Sprintf("VL%d", vlanID)]; exists {
+			issues = append(issues, fmt.Sprintf("VLAN %d has STP enabled, expected disabled", vlanID))
 		}
 	}
 
