@@ -167,10 +167,6 @@ func (pr *ProgressRunner) runWithProgress(
 		allResults = append(allResults, result)
 	}
 
-	pr.mu.Lock()
-	pr.results = append(pr.results, allResults...)
-	pr.mu.Unlock()
-
 	return allResults, nil
 }
 

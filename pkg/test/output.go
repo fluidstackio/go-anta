@@ -26,15 +26,3 @@ func AsMap(out interface{}) (map[string]interface{}, error) {
 	return m, nil
 }
 
-// AsSlice is the slice-shaped counterpart of AsMap for commands whose
-// top-level output is a JSON array.
-func AsSlice(out interface{}) ([]interface{}, error) {
-	if out == nil {
-		return nil, fmt.Errorf("device output is nil")
-	}
-	s, ok := out.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("expected JSON array, got %T", out)
-	}
-	return s, nil
-}
