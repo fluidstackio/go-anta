@@ -15,8 +15,10 @@ func TestDcfabSource_FactoryParsesYAML(t *testing.T) {
 kind: dcfab
 env: prod
 region: wdl1
-roles: [fm, ft]
-platforms: [eos]
+filter: |
+  implementation: ACTIVE,
+  roles: ["fm0","fm1"],
+  platforms: ["eos"]
 prefer_ip: ipv6
 `)
 	src, err := LoadSource(tmp)
@@ -30,8 +32,8 @@ prefer_ip: ipv6
 	if d.cfg.Region != "wdl1" || d.cfg.Env != "prod" || d.cfg.PreferIP != "ipv6" {
 		t.Errorf("config not parsed: %+v", d.cfg)
 	}
-	if len(d.cfg.Roles) != 2 || d.cfg.Roles[0] != "fm" {
-		t.Errorf("roles not parsed: %v", d.cfg.Roles)
+	if !strings.Contains(d.cfg.Filter, `roles: ["fm0","fm1"]`) {
+		t.Errorf("filter not parsed: %q", d.cfg.Filter)
 	}
 }
 
@@ -39,6 +41,8 @@ func TestDcfabSource_FactoryRejectsMissingRegion(t *testing.T) {
 	tmp := writeYAML(t, `
 kind: dcfab
 env: prod
+filter: |
+  implementation: ACTIVE
 `)
 	_, err := LoadSource(tmp)
 	if err == nil || !strings.Contains(err.Error(), "region") {
@@ -46,12 +50,22 @@ env: prod
 	}
 }
 
-func TestDcfabSource_QueryURLEncodesAllFilters(t *testing.T) {
+func TestDcfabSource_FactoryRejectsMissingFilter(t *testing.T) {
+	tmp := writeYAML(t, `
+kind: dcfab
+region: wdl1
+`)
+	_, err := LoadSource(tmp)
+	if err == nil || !strings.Contains(err.Error(), "filter") {
+		t.Errorf("expected filter-required error, got %v", err)
+	}
+}
+
+func TestDcfabSource_QueryURLSplicesFilterVerbatim(t *testing.T) {
 	src := &DcfabSource{
 		cfg: DcfabConfig{
-			Region:    "wdl1",
-			Roles:     []string{"fm", "ft"},
-			Platforms: []string{"eos"},
+			Region: "wdl1",
+			Filter: `implementation: ACTIVE, roles: ["fm0"], platforms: ["eos"]`,
 		},
 	}
 	u := src.queryURL("https://dcfab.example.com")
@@ -63,10 +77,28 @@ func TestDcfabSource_QueryURLEncodesAllFilters(t *testing.T) {
 		t.Errorf("wrong endpoint prefix: %s", u)
 	}
 	q := parsed.Query().Get("query")
-	for _, want := range []string{`region(name: "wdl1")`, `roles: ["fm","ft"]`, `platforms: ["eos"]`, `implementation: ACTIVE`, `managementInterface`} {
+	for _, want := range []string{`region(name: "wdl1")`, `roles: ["fm0"]`, `platforms: ["eos"]`, `implementation: ACTIVE`, `limit: 5000`, `managementInterface`} {
 		if !strings.Contains(q, want) {
 			t.Errorf("query missing %q\nfull query: %s", want, q)
 		}
+	}
+}
+
+func TestDcfabSource_QueryURLRespectsUserLimit(t *testing.T) {
+	src := &DcfabSource{
+		cfg: DcfabConfig{
+			Region: "wdl1",
+			Filter: `implementation: ACTIVE, limit: 100`,
+		},
+	}
+	u := src.queryURL("https://dcfab.example.com")
+	parsed, _ := url.Parse(u)
+	q := parsed.Query().Get("query")
+	if !strings.Contains(q, "limit: 100") {
+		t.Errorf("user limit not preserved: %s", q)
+	}
+	if strings.Contains(q, "limit: 5000") {
+		t.Errorf("auto-limit should not be appended when user set one: %s", q)
 	}
 }
 

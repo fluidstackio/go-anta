@@ -23,7 +23,7 @@ type InventoryLoadOptions struct {
 	NetboxToken string // --netbox-token
 	NetboxQuery string // --netbox-query (raw key=value,key=value)
 	Region      string // --region (dcfab override)
-	Roles       string // --roles (dcfab override, comma-separated)
+	Filter      string // --filter (dcfab GraphQL devices(...) args)
 
 	// Credential / connection defaults applied after Load.
 	Defaults inventory.DeviceDefaults
@@ -65,18 +65,18 @@ func LoadInventoryForRun(ctx context.Context, opts InventoryLoadOptions) (*inven
 			return nil, err
 		}
 		// Apply CLI overrides to the source before loading. --region and
-		// --roles only mean something for a dcfab source; warn if the user
-		// supplied them with a different kind so they aren't silently
+		// --filter only mean something for a dcfab source; warn if the
+		// user supplied them with a different kind so they aren't silently
 		// confused about why their filter had no effect.
 		if d, ok := src.(*inventory.DcfabSource); ok {
 			if opts.Region != "" {
 				d.SetRegion(opts.Region)
 			}
-			if opts.Roles != "" {
-				d.SetRoles(splitCSV(opts.Roles))
+			if opts.Filter != "" {
+				d.SetFilter(opts.Filter)
 			}
-		} else if opts.Region != "" || opts.Roles != "" {
-			logger.Warnf("--region/--roles only apply to dcfab sources; ignored for %s source", src.Kind())
+		} else if opts.Region != "" || opts.Filter != "" {
+			logger.Warnf("--region/--filter only apply to dcfab sources; ignored for %s source", src.Kind())
 		}
 		inv, err := src.Load(ctx)
 		if err != nil {
@@ -176,18 +176,3 @@ func parseNetboxQueryString(s string) inventory.NetboxQuery {
 	return q
 }
 
-// splitCSV splits a comma-separated string into trimmed, non-empty tokens.
-func splitCSV(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}

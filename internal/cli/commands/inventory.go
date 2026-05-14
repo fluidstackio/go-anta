@@ -28,7 +28,7 @@ var (
 	invShowExtra      bool
 	invSource         string
 	invRegion         string
-	invRoles          string
+	invFilter         string
 	invDeviceUsername string
 	invDevicePassword string
 )
@@ -53,7 +53,7 @@ func init() {
 	InventoryCmd.Flags().BoolVar(&invShowExtra, "show-extra", false, "show extra device metadata")
 	InventoryCmd.Flags().StringVar(&invSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	InventoryCmd.Flags().StringVar(&invRegion, "region", "", "dcfab region filter")
-	InventoryCmd.Flags().StringVar(&invRoles, "roles", "", "dcfab roles filter (comma-separated)")
+	InventoryCmd.Flags().StringVar(&invFilter, "filter", "", "dcfab GraphQL filter (e.g. 'roles: [\"fm0\"], platforms: [\"eos\"]'); overrides YAML filter")
 	InventoryCmd.Flags().StringVar(&invDeviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	InventoryCmd.Flags().StringVar(&invDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
 }
@@ -69,7 +69,7 @@ func runInventory(cmd *cobra.Command, args []string) error {
 		NetboxToken:    invNetboxToken,
 		NetboxQuery:    invNetboxQuery,
 		Region:         invRegion,
-		Roles:          invRoles,
+		Filter:         invFilter,
 		Defaults: inventory.DeviceDefaults{
 			Username: invDeviceUsername,
 			Password: invDevicePassword,

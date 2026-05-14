@@ -43,7 +43,7 @@ var (
 	transport         string
 	source            string
 	region            string
-	roles             string
+	filter            string
 	plaintext         bool
 )
 
@@ -71,7 +71,7 @@ func init() {
 	NrfuCmd.Flags().StringVar(&transport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
 	NrfuCmd.Flags().StringVar(&source, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	NrfuCmd.Flags().StringVar(&region, "region", "", "dcfab region filter")
-	NrfuCmd.Flags().StringVar(&roles, "roles", "", "dcfab roles filter (comma-separated)")
+	NrfuCmd.Flags().StringVar(&filter, "filter", "", "dcfab GraphQL filter (e.g. 'roles: [\"fm0\"], platforms: [\"eos\"]'); overrides YAML filter")
 	NrfuCmd.Flags().BoolVar(&plaintext, "plaintext", false, "use plaintext gRPC for gnmi transport (no TLS); ignored for eapi")
 	NrfuCmd.Flags().IntVarP(&concurrency, "concurrency", "j", 10, "maximum concurrent connections")
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
@@ -111,7 +111,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 		NetboxToken:    netboxToken,
 		NetboxQuery:    netboxQuery,
 		Region:         region,
-		Roles:          roles,
+		Filter:         filter,
 		Defaults: inventory.DeviceDefaults{
 			Username:  deviceUsername,
 			Password:  devicePassword,

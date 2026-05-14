@@ -16,13 +16,22 @@ import (
 )
 
 // DcfabConfig is the YAML schema for `kind: dcfab` inventory files.
+//
+// Filter is a free-form GraphQL fragment spliced verbatim into the
+// devices(...) call. It must include at minimum a filter that narrows
+// the query (e.g. "implementation: ACTIVE, platforms: [\"eos\"]").
+// dcfab's schema documents the available filter keys (roles, platforms,
+// racks, skus, etc.); see resources/schema-reference.md in the
+// query-dcfab skill.
+//
+// If Filter does not already specify `limit:`, the source auto-appends
+// `limit: 5000` so the truncation-cap safety net remains effective.
 type DcfabConfig struct {
-	Env       string   `yaml:"env"`       // prod | dev (default prod)
-	Region    string   `yaml:"region"`    // required
-	Roles     []string `yaml:"roles"`     // optional filter
-	Platforms []string `yaml:"platforms"` // optional filter
-	Endpoint  string   `yaml:"endpoint"`  // optional override
-	PreferIP  string   `yaml:"prefer_ip"` // ipv4 | ipv6 (default ipv6)
+	Env      string `yaml:"env"`       // prod | dev (default prod)
+	Region   string `yaml:"region"`    // required: GraphQL region(name:) arg
+	Filter   string `yaml:"filter"`    // required: GraphQL devices(...) args
+	Endpoint string `yaml:"endpoint"`  // optional override
+	PreferIP string `yaml:"prefer_ip"` // ipv4 | ipv6 (default ipv6)
 }
 
 // DcfabSource implements Source by querying the dcfab GraphQL API.
@@ -38,9 +47,9 @@ func (s *DcfabSource) Kind() string { return "dcfab" }
 // Used by the CLI --region flag.
 func (s *DcfabSource) SetRegion(region string) { s.cfg.Region = region }
 
-// SetRoles overrides the roles filter after the source was constructed.
-// Used by the CLI --roles flag.
-func (s *DcfabSource) SetRoles(roles []string) { s.cfg.Roles = roles }
+// SetFilter overrides the GraphQL filter fragment after the source was
+// constructed. Used by the CLI --filter flag.
+func (s *DcfabSource) SetFilter(filter string) { s.cfg.Filter = filter }
 
 // dcfabEndpoint resolves the HTTPS endpoint from the config. Explicit
 // Endpoint wins; otherwise Env selects between prod/dev defaults.
@@ -65,16 +74,19 @@ func (s *DcfabSource) queryURL(endpoint string) string {
 	return strings.TrimRight(endpoint, "/") + "/v1alpha1/query?" + v.Encode()
 }
 
-// buildQuery assembles the GraphQL query. Returns ActiveDevice fields
-// for inventory mapping: name, role, platform, and the management
-// interface addresses.
+// buildQuery assembles the GraphQL query by splicing the user-supplied
+// Filter into devices(...). If the filter doesn't already specify
+// `limit:`, the pagination cap (5000) is appended so the response-size
+// guard stays effective.
 func (s *DcfabSource) buildQuery() string {
-	args := []string{`implementation: ACTIVE`, `limit: 5000`}
-	if len(s.cfg.Roles) > 0 {
-		args = append(args, fmt.Sprintf(`roles: %s`, stringSliceLiteral(s.cfg.Roles)))
-	}
-	if len(s.cfg.Platforms) > 0 {
-		args = append(args, fmt.Sprintf(`platforms: %s`, stringSliceLiteral(s.cfg.Platforms)))
+	args := s.cfg.Filter
+	if !strings.Contains(args, "limit:") {
+		args = strings.TrimSpace(args)
+		args = strings.TrimSuffix(args, ",")
+		if args != "" {
+			args += ", "
+		}
+		args += fmt.Sprintf("limit: %d", dcfabPaginationCap)
 	}
 	return fmt.Sprintf(`{
   region(name: %q) {
@@ -92,17 +104,7 @@ func (s *DcfabSource) buildQuery() string {
       }
     }
   }
-}`, s.cfg.Region, strings.Join(args, ", "))
-}
-
-// stringSliceLiteral formats ["a","b"] for embedding in a GraphQL
-// argument list.
-func stringSliceLiteral(in []string) string {
-	parts := make([]string, len(in))
-	for i, s := range in {
-		parts[i] = fmt.Sprintf("%q", s)
-	}
-	return "[" + strings.Join(parts, ",") + "]"
+}`, s.cfg.Region, args)
 }
 
 // dcfabResponse is the JSON shape returned by the dcfab GraphQL endpoint
@@ -179,7 +181,7 @@ func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
 
 	devices := parsed.Data.Region.Devices
 	if len(devices) == dcfabPaginationCap {
-		return nil, fmt.Errorf("dcfab: response hit %d-device pagination cap; narrow your roles/platforms filter or implement pagination", dcfabPaginationCap)
+		return nil, fmt.Errorf("dcfab: response hit %d-device pagination cap; narrow your filter or paginate via offset/limit", dcfabPaginationCap)
 	}
 
 	inv := &Inventory{}
@@ -257,6 +259,9 @@ func init() {
 		}
 		if cfg.Region == "" {
 			return nil, fmt.Errorf("dcfab source: region is required")
+		}
+		if strings.TrimSpace(cfg.Filter) == "" {
+			return nil, fmt.Errorf("dcfab source: filter is required (e.g. 'implementation: ACTIVE, platforms: [\"eos\"]')")
 		}
 		return &DcfabSource{cfg: cfg.DcfabConfig}, nil
 	})

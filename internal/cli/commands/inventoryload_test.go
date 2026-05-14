@@ -129,7 +129,8 @@ func TestLoadInventoryForRun_DcfabRegionRolesOverride(t *testing.T) {
 	yaml := `
 kind: dcfab
 region: original-region
-roles: [original]
+filter: |
+  implementation: ACTIVE, roles: ["original"]
 endpoint: ` + srv.URL + `
 `
 	if err := os.WriteFile(path, []byte(yaml), 0644); err != nil {
@@ -139,7 +140,7 @@ endpoint: ` + srv.URL + `
 	opts := InventoryLoadOptions{
 		Path:   path,
 		Region: "overridden-region",
-		Roles:  "fm,ft",
+		Filter: `implementation: ACTIVE, roles: ["fm0","ft1"]`,
 		Defaults: inventory.DeviceDefaults{
 			Username: "admin",
 			Password: "pw",

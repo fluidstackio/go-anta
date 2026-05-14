@@ -24,7 +24,7 @@ var (
 	checkTransport      string
 	checkSource         string
 	checkRegion         string
-	checkRoles          string
+	checkFilter         string
 	checkPlaintext      bool
 )
 
@@ -49,7 +49,7 @@ func init() {
 	CheckCmd.Flags().StringVar(&checkTransport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
 	CheckCmd.Flags().StringVar(&checkSource, "source", "", "override the YAML inventory kind (file, netbox, dcfab)")
 	CheckCmd.Flags().StringVar(&checkRegion, "region", "", "dcfab region filter")
-	CheckCmd.Flags().StringVar(&checkRoles, "roles", "", "dcfab roles filter (comma-separated)")
+	CheckCmd.Flags().StringVar(&checkFilter, "filter", "", "dcfab GraphQL filter (e.g. 'roles: [\"fm0\"], platforms: [\"eos\"]'); overrides YAML filter")
 	CheckCmd.Flags().BoolVar(&checkPlaintext, "plaintext", false, "use plaintext gRPC for gnmi transport (no TLS); ignored for eapi")
 }
 
@@ -73,7 +73,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		NetboxToken:    checkNetboxToken,
 		NetboxQuery:    checkNetboxQuery,
 		Region:         checkRegion,
-		Roles:          checkRoles,
+		Filter:         checkFilter,
 		Defaults: inventory.DeviceDefaults{
 			Username:  checkDeviceUsername,
 			Password:  checkDevicePassword,

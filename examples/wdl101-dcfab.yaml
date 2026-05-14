@@ -13,6 +13,8 @@
 kind: dcfab
 env: prod
 region: wdl1
-roles: [fm0, fm1, ft1, ft2]   # fabric switches; dcfab role names carry a numeric suffix
-platforms: [eos]
+filter: |
+  implementation: ACTIVE,
+  roles: ["fm0","fm1","ft1","ft2"],
+  platforms: ["eos"]
 prefer_ip: ipv6
