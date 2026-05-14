@@ -63,7 +63,7 @@ func (t *VerifySTPMode) Execute(ctx context.Context, dev device.Device) (*test.T
 	}
 
 	cmd := device.Command{
-		Template: "show spanning-tree",
+		Template: "show spanning-tree detail",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -75,29 +75,52 @@ func (t *VerifySTPMode) Execute(ctx context.Context, dev device.Device) (*test.T
 		return result, nil
 	}
 
-	issues := []string{}
+	stpData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected STP output: %v", err)
+		return result, nil
+	}
 
-	if stpData, ok := cmdResult.Output.(map[string]interface{}); ok {
-		if mode, ok := stpData["protocolMode"].(string); ok {
-			if mode != t.Mode {
-				issues = append(issues, fmt.Sprintf("STP mode is '%s', expected '%s'", mode, t.Mode))
+	issues := []string{}
+	expected := normalizeStpMode(t.Mode)
+
+	// `show spanning-tree` returns spanningTreeInstances keyed by
+	// instance label ("VL1" for VLAN 1 under rstp/rapid-pvst, "MST0"
+	// under mstp). The protocol field on each instance reports the
+	// active STP variant. EOS variants spell rapid-pvst as either
+	// "rapidPvst" or "rapid-pvst" depending on release, hence the
+	// normalization to letters-only lowercase.
+	instances, ok := stpData["spanningTreeInstances"].(map[string]interface{})
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "STP output missing 'spanningTreeInstances'"
+		return result, nil
+	}
+
+	if len(t.Vlans) > 0 {
+		for _, vlanID := range t.Vlans {
+			key := fmt.Sprintf("VL%d", vlanID)
+			inst, ok := instances[key].(map[string]interface{})
+			if !ok {
+				issues = append(issues, fmt.Sprintf("VLAN %d not found in STP instances", vlanID))
+				continue
+			}
+			proto, _ := inst["protocol"].(string)
+			if normalizeStpMode(proto) != expected {
+				issues = append(issues, fmt.Sprintf("VLAN %d STP mode is %q, expected %q", vlanID, proto, t.Mode))
 			}
 		}
-
-		if len(t.Vlans) > 0 {
-			if instances, ok := stpData["instances"].(map[string]interface{}); ok {
-				for _, vlanID := range t.Vlans {
-					vlanStr := fmt.Sprintf("%d", vlanID)
-					if instance, ok := instances[vlanStr].(map[string]interface{}); ok {
-						if instanceMode, ok := instance["protocolMode"].(string); ok {
-							if instanceMode != t.Mode {
-								issues = append(issues, fmt.Sprintf("VLAN %d STP mode is '%s', expected '%s'", vlanID, instanceMode, t.Mode))
-							}
-						}
-					} else {
-						issues = append(issues, fmt.Sprintf("VLAN %d not found in STP instances", vlanID))
-					}
-				}
+	} else {
+		// No VLANs specified — every instance must run the expected mode.
+		for key, raw := range instances {
+			inst, ok := raw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			proto, _ := inst["protocol"].(string)
+			if normalizeStpMode(proto) != expected {
+				issues = append(issues, fmt.Sprintf("Instance %s STP mode is %q, expected %q", key, proto, t.Mode))
 			}
 		}
 	}
@@ -110,17 +133,26 @@ func (t *VerifySTPMode) Execute(ctx context.Context, dev device.Device) (*test.T
 	return result, nil
 }
 
+// normalizeStpMode strips hyphens and lowercases the mode string so that
+// "rapidPvst", "rapid-pvst", and "RapidPVST" all compare equal. EOS spells
+// rapid-pvst as either "rapidPvst" or "rapid-pvst" depending on release,
+// and user inputs vary even within one team.
+func normalizeStpMode(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, "-", ""))
+}
+
 func (t *VerifySTPMode) ValidateInput(input interface{}) error {
 	if t.Mode == "" {
 		return fmt.Errorf("STP mode must be specified")
 	}
-	validModes := []string{"mstp", "rstp", "rapidPvst", "pvst"}
+	validModes := []string{"mstp", "rstp", "rapid-pvst", "rapidPvst", "pvst"}
+	want := normalizeStpMode(t.Mode)
 	for _, mode := range validModes {
-		if t.Mode == mode {
+		if normalizeStpMode(mode) == want {
 			return nil
 		}
 	}
-	return fmt.Errorf("invalid STP mode '%s', must be one of: %v", t.Mode, validModes)
+	return fmt.Errorf("invalid STP mode %q, must be one of: %v", t.Mode, validModes)
 }
 
 // VerifySTPBlockedPorts verifies there are no STP blocked ports
