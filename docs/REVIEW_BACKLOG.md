@@ -50,14 +50,24 @@ Each item below has a concrete file:line anchor and the rough shape of the fix. 
 
 ### CRITICAL — production correctness gaps
 
-#### R1. BGP protocol-correctness bugs (5 sub-items)
-False positives or always-fails because the test doesn't actually check what its docs claim.
+#### ~~R1. BGP protocol-correctness bugs~~ — shipped on `fix/bgp-r1-afi-safi`
 
-- **AFI/SAFI ignored in `VerifyBGPPeerCount` and `VerifyBGPPeersHealth`** (`tests/routing/bgp.go:506-578` and `bgp.go:692-746`). The struct captures AFI/SAFI but the loop counts all peers in the VRF regardless of family. Multi-AF devices fail spuriously. Fix: filter by `peerInfo["addressFamilies"]` or query `show bgp <afi> <safi> summary` directly.
-- **`VerifyBGPRouteECMP` hardcodes threshold `>=2`** (`bgp.go:3567-3577`). The YAML doc shows `expected_paths: 4` per route but `Routes []string` discards everything except the prefix. Make `Routes` a struct list `{prefix, expected_paths, vrf}` and compare `len(NextHops)` against the per-route expected value. Same issue in `VerifyBGPRoutePaths` (`bgp.go:3394-3476`).
-- **`VerifyBGPRedistribution` inverted logic** (`bgp.go:3679-3690`). Queries `show ip route bgp` — every route returned has routeType "BGP", so the check "Route X appears to be learned via BGP, not redistributed" fires for every row. Use `show ip bgp` and check the `origin`/`type` per path, or query the source-protocol table.
-- **`VerifyBGPPeerTtlMultiHops` conflates `ttl` and `max_hops`** (`bgp.go:3823-3828`). YAML docs say `expected_ttl: 255` and `max_hops: 5`. EOS returns `ebgpMultihop` as a hop count (~5). Currently compares against `expected_ttl` so always fails. Fix: read both fields; compare `EbgpMultihop` to `max_hops`.
-- **`VerifyBGPPeersHealthRibd` wrong AF key format** (`bgp.go:3201`). Builds `fmt.Sprintf("%s-%s", AFI, SAFI)` → `"ipv4-unicast"`. EOS `show bgp summary ribd` returns camelCase keys (`ipv4Unicast`, `evpn`). Always reports "Address family not found". Fix: canonicalize before lookup.
+All five sub-items addressed. Each is an independent commit; lab-verified
+against EOS 4.34.4M (wdl101) except where noted. Real-data inspection
+revealed that several of the original diagnoses were *less severe* than
+what was actually broken — the file had wrong response decoders, wrong
+field names, and YAML inputs that were never parsed.
+
+| Sub-item | Commit | What landed |
+|---|---|---|
+| R1.1 AFI/SAFI in `VerifyBGPPeerCount` / `VerifyBGPPeersHealth` | `bb8e198` | Per-AF query via new `bgpSummaryCommand` helper (`show bgp ipv4 unicast summary` / `show bgp evpn summary` / …). Old code read peer-level `peerState` regardless of AF. |
+| R1.5 `VerifyBGPPeersHealthRibd` AF key | `b59d466` | New `bgpRibdAFKey` helper produces camelCase keys (`ipv4Unicast`, `vpnIpv4`, `ipv4MplsLabels`, `evpn`). Note: `show bgp summary ribd` is invalid on multi-agent EOS; fix is for ribd-mode devices. |
+| R1.4 `VerifyBGPPeerTtlMultiHops` | `5f445c1` | Found three layered bugs: YAML `expected_ttl`/`max_hops` were never parsed; response decoded as `vrfs.<vrf>.neighbors` (map) but EOS returns `vrfs.<vrf>.peerList` (array); field was `ebgpMultihop` (nonexistent) — actual EOS fields are `ttl` and `maxTtlHops`. Now queries `show bgp neighbors vrf all` and compares both fields. Real `ValidateInput`. |
+| R1.2 `VerifyBGPRoutePaths` / `VerifyBGPRouteECMP` | `d67685c` | `Routes []string` replaced by `BgpRoute{Prefix, ExpectedPaths, VRF}` plus shared `parseBgpRoutes`. RoutePaths now uses `show ip bgp vrf all` counting `bgpRoutePaths`; ECMP groups by VRF and issues `show ip route vrf <vrf> bgp detail` counting `vias` (the old `nextHops` field never existed — EOS uses `vias`). Fallback: ECMP requires ≥2 next-hops when `expected_paths` is unset; RoutePaths requires ≥1 path. |
+| R1.3 `VerifyBGPRedistribution` | `98203bf` | Was silently passing: it queried `show ip route bgp` and compared `routeType == "BGP"`, but EOS returns "eBGP"/"iBGP" so the failure branch was vacuously unreachable. Rewritten around `show bgp instance.vrfs[vrf].afiSafiConfig[af].redistributedRoutes[].proto` for the config check; optional `expected_count` enforced as an upper-bound sanity check via `show ip route vrf <vrf> <proto>`. New `BgpRedistribution` type; real `ValidateInput`. |
+
+Real-device outputs used for verification are in `/tmp/bgp-out/` (regenerable
+with `cmd/debug` against `examples/wdl101-inventory.yaml`).
 
 #### R2. `VerifyEVPNType5Routes` doc/code schema mismatch
 `tests/evpn/type5_routes.go`. Docs (line 48) tell users to write `prefixes: [- address: ..., vni:, routes: [...]]`. Code reads `prefixMap["prefix"]` (not `address`) at line 118, and reads `inputs["routes"]`/`inputs["paths"]` at top level (line 134, 160). Every documented YAML config produces empty parses and the test errors. Either change docs to match code or restructure the parser. Pick whichever matches the intended schema.
