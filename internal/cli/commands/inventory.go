@@ -31,6 +31,8 @@ var (
 	invFilter         string
 	invDeviceUsername string
 	invDevicePassword string
+	invTransport      string
+	invPlaintext      bool
 )
 
 var InventoryCmd = &cobra.Command{
@@ -56,6 +58,8 @@ func init() {
 	InventoryCmd.Flags().StringVar(&invFilter, "filter", "", "dcfab GraphQL filter (e.g. 'roles: [\"fm0\"], platforms: [\"eos\"]'); overrides YAML filter")
 	InventoryCmd.Flags().StringVar(&invDeviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	InventoryCmd.Flags().StringVar(&invDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
+	InventoryCmd.Flags().StringVar(&invTransport, "transport", "", "transport for device connections: eapi or gnmi. When set, overrides per-device YAML transport; otherwise the YAML value is used (or eapi if unset).")
+	InventoryCmd.Flags().BoolVar(&invPlaintext, "plaintext", false, "use plaintext gRPC for gnmi transport (no TLS); ignored for eapi")
 }
 
 func runInventory(cmd *cobra.Command, args []string) error {
@@ -71,13 +75,15 @@ func runInventory(cmd *cobra.Command, args []string) error {
 		Region:         invRegion,
 		Filter:         invFilter,
 		Defaults: inventory.DeviceDefaults{
-			Username: invDeviceUsername,
-			Password: invDevicePassword,
-			Insecure: true,
+			Username:  invDeviceUsername,
+			Password:  invDevicePassword,
+			Transport: invTransport,
+			Insecure:  true,
+			Plaintext: invPlaintext,
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load inventory: %w", err)
 	}
 
 	// Apply filters

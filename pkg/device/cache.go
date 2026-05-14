@@ -11,11 +11,16 @@ type cacheEntry struct {
 	timestamp time.Time
 }
 
+// CommandCache stores recent device command results keyed by template
+// + params + format. Entries expire after ttl; a background goroutine
+// periodically prunes stale entries. Always call Stop() when discarding
+// a cache to terminate the goroutine.
 type CommandCache struct {
 	mu      sync.RWMutex
 	entries map[string]*cacheEntry
 	maxSize int
 	ttl     time.Duration
+	done    chan struct{} // closed by Stop to halt cleanupRoutine
 
 	// Counters are accessed concurrently by Get under RLock (read path,
 	// hot) and by Set/evictOldest/cleanup under Lock. Atomics let the
@@ -26,15 +31,33 @@ type CommandCache struct {
 	evictions atomic.Int64
 }
 
+// NewCommandCache constructs a cache with the given size cap and TTL
+// and starts a background pruning goroutine. The caller is responsible
+// for calling Stop() when discarding the cache.
 func NewCommandCache(maxSize int, ttl time.Duration) *CommandCache {
 	cache := &CommandCache{
 		entries: make(map[string]*cacheEntry),
 		maxSize: maxSize,
 		ttl:     ttl,
+		done:    make(chan struct{}),
 	}
 
 	go cache.cleanupRoutine()
 	return cache
+}
+
+// Stop halts the background cleanup goroutine. Safe to call multiple
+// times. After Stop, Get/Set/Clear continue to work but no eviction
+// happens until the next Set hits maxSize.
+func (c *CommandCache) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <-c.done:
+		// already stopped
+	default:
+		close(c.done)
+	}
 }
 
 func (c *CommandCache) Get(key string) *CommandResult {
@@ -101,8 +124,13 @@ func (c *CommandCache) cleanupRoutine() {
 	ticker := time.NewTicker(c.ttl / 2)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.cleanup()
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			c.cleanup()
+		}
 	}
 }
 

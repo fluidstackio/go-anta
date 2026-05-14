@@ -49,28 +49,3 @@ func SkipOnVirtualPlatforms(dev device.Device, testName string, categories []str
 	}
 }
 
-// SkipOnSpecificPlatforms creates a TestResult with TestSkipped status if running on specified platforms
-// Returns nil if the platform is not in the skip list (test should continue)
-// Returns a TestResult with TestSkipped status if the platform should be skipped
-func SkipOnSpecificPlatforms(dev device.Device, testName string, categories []string, skipPlatforms []string, reason string) *test.TestResult {
-	hardwareModel := dev.HardwareModel()
-
-	for _, platform := range skipPlatforms {
-		if strings.Contains(hardwareModel, platform) {
-			// Default reason if none provided
-			if reason == "" {
-				reason = fmt.Sprintf("not supported on platform %s", platform)
-			}
-
-			return &test.TestResult{
-				TestName:   testName,
-				DeviceName: dev.Name(),
-				Status:     test.TestSkipped,
-				Categories: categories,
-				Message:    fmt.Sprintf("Test skipped: %s (platform: %s)", reason, hardwareModel),
-			}
-		}
-	}
-
-	return nil // Don't skip, continue with test
-}

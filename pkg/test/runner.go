@@ -13,8 +13,6 @@ import (
 
 type Runner struct {
 	maxConcurrency int
-	results        []TestResult
-	mu             sync.Mutex
 	registry       *Registry
 }
 
@@ -25,7 +23,6 @@ func NewRunner(maxConcurrency int) *Runner {
 
 	return &Runner{
 		maxConcurrency: maxConcurrency,
-		results:        make([]TestResult, 0),
 		registry:       GetRegistry(),
 	}
 }
@@ -91,10 +88,6 @@ func (r *Runner) Run(ctx context.Context, tests []TestDefinition, devices []devi
 	for result := range results {
 		allResults = append(allResults, result)
 	}
-
-	r.mu.Lock()
-	r.results = append(r.results, allResults...)
-	r.mu.Unlock()
 
 	return allResults, nil
 }
@@ -194,58 +187,3 @@ func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device
 	return *execResult
 }
 
-func (r *Runner) GetResults() []TestResult {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	
-	results := make([]TestResult, len(r.results))
-	copy(results, r.results)
-	return results
-}
-
-func (r *Runner) ClearResults() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.results = make([]TestResult, 0)
-}
-
-func (r *Runner) FilterResults(status TestStatus) []TestResult {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	filtered := make([]TestResult, 0)
-	for _, result := range r.results {
-		if result.Status == status {
-			filtered = append(filtered, result)
-		}
-	}
-	return filtered
-}
-
-func (r *Runner) GetStatistics() map[string]int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	stats := map[string]int{
-		"total":   len(r.results),
-		"success": 0,
-		"failure": 0,
-		"error":   0,
-		"skipped": 0,
-	}
-
-	for _, result := range r.results {
-		switch result.Status {
-		case TestSuccess:
-			stats["success"]++
-		case TestFailure:
-			stats["failure"]++
-		case TestError:
-			stats["error"]++
-		case TestSkipped:
-			stats["skipped"]++
-		}
-	}
-
-	return stats
-}

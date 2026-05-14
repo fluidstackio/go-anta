@@ -173,7 +173,7 @@ func (t *VerifyLLDPNeighbors) Execute(ctx context.Context, dev device.Device) (*
 }
 
 func (t *VerifyLLDPNeighbors) ValidateInput(input any) error {
-	if t.Interfaces == nil || len(t.Interfaces) == 0 {
+	if len(t.Interfaces) == 0 {
 		return fmt.Errorf("at least one interface must be specified")
 	}
 

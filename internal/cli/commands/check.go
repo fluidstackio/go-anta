@@ -14,6 +14,9 @@ import (
 )
 
 var (
+	checkInventoryFile  string
+	checkDevices        string
+	checkTags           string
 	checkNetboxURL      string
 	checkNetboxToken    string
 	checkNetboxQuery    string
@@ -36,12 +39,12 @@ var CheckCmd = &cobra.Command{
 }
 
 func init() {
-	CheckCmd.Flags().StringVarP(&inventoryFile, "inventory", "i", "", "inventory file path")
+	CheckCmd.Flags().StringVarP(&checkInventoryFile, "inventory", "i", "", "inventory file path (required unless using Netbox)")
 	CheckCmd.Flags().StringVar(&checkNetboxURL, "netbox-url", "", "Netbox URL (can also use NETBOX_URL env var)")
 	CheckCmd.Flags().StringVar(&checkNetboxToken, "netbox-token", "", "Netbox API token (can also use NETBOX_TOKEN env var)")
 	CheckCmd.Flags().StringVar(&checkNetboxQuery, "netbox-query", "", "Netbox query filter (e.g., 'site=dc1,role=leaf')")
-	CheckCmd.Flags().StringVarP(&devices, "devices", "d", "", "specific devices to check (comma-separated)")
-	CheckCmd.Flags().StringVarP(&tags, "tags", "t", "", "filter devices by tags (comma-separated)")
+	CheckCmd.Flags().StringVarP(&checkDevices, "devices", "d", "", "filter specific devices (comma-separated)")
+	CheckCmd.Flags().StringVarP(&checkTags, "tags", "t", "", "filter devices by tags (comma-separated)")
 	CheckCmd.Flags().StringVar(&checkLimit, "limit", "", "limit devices: hostname, comma-separated list (host1,host2), index (0), range (0-2), or wildcard (leaf*)")
 	CheckCmd.Flags().StringVar(&checkDeviceUsername, "device-username", "", "device username (overrides DEVICE_USERNAME env var)")
 	CheckCmd.Flags().StringVar(&checkDevicePassword, "device-password", "", "device password (overrides DEVICE_PASSWORD env var)")
@@ -67,7 +70,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	inv, err := LoadInventoryForRun(ctx, InventoryLoadOptions{
-		Path:           inventoryFile,
+		Path:           checkInventoryFile,
 		SourceOverride: checkSource,
 		NetboxURL:      checkNetboxURL,
 		NetboxToken:    checkNetboxToken,
@@ -83,16 +86,16 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load inventory: %w", err)
 	}
 
-	if tags != "" {
-		tagList := strings.Split(tags, ",")
+	if checkTags != "" {
+		tagList := strings.Split(checkTags, ",")
 		inv = inv.FilterByTags(tagList)
 	}
 
-	if devices != "" {
-		deviceList := strings.Split(devices, ",")
+	if checkDevices != "" {
+		deviceList := strings.Split(checkDevices, ",")
 		inv = inv.FilterByNames(deviceList)
 	}
 

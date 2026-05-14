@@ -168,7 +168,7 @@ func (t *VerifyReachability) Execute(ctx context.Context, dev device.Device) (*t
 }
 
 func (t *VerifyReachability) ValidateInput(input any) error {
-	if t.Hosts == nil || len(t.Hosts) == 0 {
+	if len(t.Hosts) == 0 {
 		return fmt.Errorf("at least one host must be specified")
 	}
 

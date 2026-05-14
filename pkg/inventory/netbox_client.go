@@ -259,38 +259,17 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 	logger.Debugf("Netbox API URL: %s", apiURL)
 	
 	var allDevices []NetboxDevice
-	
+
 	for apiURL != "" {
 		logger.Debugf("Fetching Netbox page: %s", apiURL)
-		req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+		nbResp, err := c.fetchDevicesPage(ctx, apiURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
+			return nil, err
 		}
-		
-		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.config.Token))
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("Content-Type", "application/json")
-		
-		resp, err := c.client.Do(req)
-		if err != nil {
-			logger.Errorf("Failed to query Netbox: %v", err)
-			return nil, fmt.Errorf("failed to query Netbox: %w", err)
-		}
-		defer resp.Body.Close()
-		
-		if resp.StatusCode != http.StatusOK {
-			logger.Errorf("Netbox API returned status %d", resp.StatusCode)
-			return nil, fmt.Errorf("Netbox API returned status %d", resp.StatusCode)
-		}
-		
-		var nbResp NetboxResponse
-		if err := json.NewDecoder(resp.Body).Decode(&nbResp); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
-		}
-		
+
 		allDevices = append(allDevices, nbResp.Results...)
 		logger.Debugf("Fetched %d devices from current page, total so far: %d", len(nbResp.Results), len(allDevices))
-		
+
 		// Follow pagination. query.Limit controls Netbox's per-page size, not
 		// a cap on total results, so we always follow Next until exhausted.
 		if nbResp.Next != "" {
@@ -302,5 +281,35 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 	
 	logger.Infof("Successfully loaded %d devices from Netbox", len(allDevices))
 	return allDevices, nil
+}
+
+// fetchDevicesPage fetches and decodes a single page of Netbox devices.
+// Extracted from GetDevices so resp.Body.Close() scopes to one request
+// rather than deferring to the end of GetDevices (which would leak file
+// descriptors across pagination on large inventories).
+func (c *NetboxClient) fetchDevicesPage(ctx context.Context, apiURL string) (*NetboxResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("netbox: create request: %w", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.config.Token))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("netbox: query: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("netbox: status %d", resp.StatusCode)
+	}
+
+	var nbResp NetboxResponse
+	if err := json.NewDecoder(resp.Body).Decode(&nbResp); err != nil {
+		return nil, fmt.Errorf("netbox: decode response: %w", err)
+	}
+	return &nbResp, nil
 }
 
