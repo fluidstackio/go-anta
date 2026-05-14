@@ -2,15 +2,15 @@ package inventory
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
-	"gopkg.in/yaml.v3"
 )
 
 // maxRangeSize caps the number of devices an IP range can expand to,
@@ -67,54 +67,23 @@ func redactedIfSet(s string) string {
 	return "[REDACTED]"
 }
 
+// LoadInventory is a back-compat wrapper around LoadSource. New callers
+// should use LoadSource directly so they can pass a context to Load and
+// supply DeviceDefaults via the CLI helper. This wrapper preserves the
+// pre-abstraction behavior of returning a validated inventory.
 func LoadInventory(path string) (*Inventory, error) {
-	// Check if it's a Netbox inventory file
-	if isNetboxInventory(path) {
-		return LoadNetboxInventory(path)
-	}
-
-	file, err := os.Open(path)
+	src, err := LoadSource(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open inventory file: %w", err)
+		return nil, err
 	}
-	defer file.Close()
-
-	var inv Inventory
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&inv); err != nil {
-		return nil, fmt.Errorf("failed to parse inventory: %w", err)
+	inv, err := src.Load(context.Background())
+	if err != nil {
+		return nil, err
 	}
-
-	if err := inv.expandNetworks(); err != nil {
-		return nil, fmt.Errorf("failed to expand networks: %w", err)
-	}
-
-	if err := inv.expandRanges(); err != nil {
-		return nil, fmt.Errorf("failed to expand ranges: %w", err)
-	}
-
 	if err := inv.Validate(); err != nil {
-		return nil, fmt.Errorf("inventory validation failed: %w", err)
+		return nil, fmt.Errorf("validate inventory: %w", err)
 	}
-
-	return &inv, nil
-}
-
-func isNetboxInventory(path string) bool {
-	file, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-
-	var check map[string]interface{}
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&check); err != nil {
-		return false
-	}
-
-	_, hasNetbox := check["netbox"]
-	return hasNetbox
+	return inv, nil
 }
 
 func (i *Inventory) expandNetworks() error {
@@ -381,4 +350,60 @@ func isHostIP(ip net.IP, ipnet *net.IPNet) bool {
 	}
 
 	return !ip.Equal(ipnet.IP) && !ip.Equal(broadcast)
+}
+
+// DeviceDefaults holds connection settings that the CLI / env supplies
+// at run time. Sources that fetch from APIs (Netbox, dcfab) leave these
+// empty on the devices they return; the caller overlays them via
+// Inventory.ApplyDefaults.
+type DeviceDefaults struct {
+	Username       string
+	Password       string
+	EnablePassword string
+	Timeout        time.Duration
+	Transport      string
+	Insecure       bool
+	Plaintext      bool
+	Port           int
+}
+
+// ApplyDefaults returns a new Inventory in which each device has any
+// empty connection-config fields filled in from d. Per-device YAML
+// values always win; defaults only fill blanks. The receiver is not
+// mutated.
+func (i *Inventory) ApplyDefaults(d DeviceDefaults) *Inventory {
+	out := &Inventory{
+		Networks: i.Networks,
+		Ranges:   i.Ranges,
+		Devices:  make([]device.DeviceConfig, len(i.Devices)),
+	}
+	for idx, dev := range i.Devices {
+		if dev.Username == "" {
+			dev.Username = d.Username
+		}
+		if dev.Password == "" {
+			dev.Password = d.Password
+		}
+		if dev.EnablePassword == "" {
+			dev.EnablePassword = d.EnablePassword
+		}
+		if dev.Timeout == 0 {
+			dev.Timeout = d.Timeout
+		}
+		if dev.Transport == "" {
+			dev.Transport = d.Transport
+		}
+		if dev.Port == 0 {
+			dev.Port = d.Port
+		}
+		// Booleans: only flip false→true; never the reverse.
+		if !dev.Insecure && d.Insecure {
+			dev.Insecure = true
+		}
+		if !dev.Plaintext && d.Plaintext {
+			dev.Plaintext = true
+		}
+		out.Devices[idx] = dev
+	}
+	return out
 }

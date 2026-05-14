@@ -16,7 +16,17 @@
       "Bash(chmod:*)",
       "Bash(/tmp/claude/check_godocs.sh:*)",
       "Bash(python3:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(git stash *)",
+      "Bash(gh pr *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git -C /Users/gmckee/projects/go-anta add pkg/inventory/source_file.go pkg/inventory/source_file_test.go pkg/inventory/inventory.go)",
+      "Bash(git -C /Users/gmckee/projects/go-anta commit -m ' *)",
+      "Bash(git *)"
     ],
     "deny": [],
     "ask": []
