@@ -413,6 +413,35 @@ func (t *VerifyBGPUnnumbered) ValidateInput(input any) error {
 
 // ==================== Common BGP Structures for Extended Tests ====================
 
+// bgpRibdAFKey returns the camelCase address-family key used in
+// `show bgp summary ribd` JSON output. EOS emits keys like "ipv4Unicast",
+// "ipv6Unicast", "evpn", "vpnIpv4", "ipv4MplsLabels"; YAML inputs use the
+// hyphenated CLI form ("ipv4"/"unicast", "vpn-ipv4", "ipv4"/"mpls-labels").
+func bgpRibdAFKey(afi, safi string) string {
+	afi = strings.ToLower(strings.TrimSpace(afi))
+	safi = strings.ToLower(strings.TrimSpace(safi))
+	// EVPN has no SAFI in EOS RIBD output keys.
+	if afi == "evpn" {
+		return "evpn"
+	}
+	if safi == "" {
+		safi = "unicast"
+	}
+	parts := strings.Split(afi+"-"+safi, "-")
+	var b strings.Builder
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		if i == 0 {
+			b.WriteString(p)
+		} else {
+			b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+		}
+	}
+	return b.String()
+}
+
 // bgpSummaryCommand returns the EOS `show bgp ... summary` invocation that
 // scopes the response to a single address family. `show bgp summary` without
 // an AFI/SAFI returns peers from every address family at once, so callers
@@ -3227,7 +3256,7 @@ var response struct {
 			continue
 		}
 
-		afKey := fmt.Sprintf("%s-%s", addressFamily.AFI, addressFamily.SAFI)
+		afKey := bgpRibdAFKey(addressFamily.AFI, addressFamily.SAFI)
 		afData, exists := vrfData.AddressFamilies[afKey]
 		if !exists {
 			issues = append(issues, fmt.Sprintf("Address family %s/%s not found in VRF %s",
