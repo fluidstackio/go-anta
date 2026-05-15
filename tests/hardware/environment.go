@@ -159,6 +159,19 @@ func NewVerifyEnvironmentCooling(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// FanReport is the structured record of one fan, surfaced in
+// TestResult.Details so the HTML reporter can render the table
+// instead of the old success-with-no-info case.
+type FanReport struct {
+	Name           string `json:"name"`
+	Container      string `json:"container,omitempty"`
+	Label          string `json:"label,omitempty"`
+	Status         string `json:"status"`
+	ActualSpeedPct int    `json:"actual_speed_pct,omitempty"`
+	ActualSpeedRPM int    `json:"actual_speed_rpm,omitempty"`
+	ConfiguredPct  int    `json:"configured_pct,omitempty"`
+}
+
 func (t *VerifyEnvironmentCooling) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -192,65 +205,120 @@ func (t *VerifyEnvironmentCooling) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
+	var fans []FanReport
 	fanIssues := []string{}
 
-	// Check power supply fans
-	if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
-		for psName, psData := range powerSupplies {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupplyFans(psName, ps, &fanIssues)
-			}
-		}
-	}
+	// Power supply fans. EOS returns powerSupplySlots as either a map
+	// keyed by slot name or a list of slot objects (each with `label`)
+	// depending on platform/version — walk both shapes.
+	walkContainer(coolingData["powerSupplySlots"], func(slotName string, slot map[string]any) {
+		t.collectContainerFans(fmt.Sprintf("PowerSupplySlot/%s", slotName), slot, &fans, &fanIssues)
+	})
 
-	// Check fan trays
-	if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
-		for fanTrayName, fanTrayData := range fanTrays {
-			if fanTray, ok := fanTrayData.(map[string]any); ok {
-				t.checkFanTray(fanTrayName, fanTray, &fanIssues)
-			}
-		}
-	}
+	// Fan trays (same dual shape).
+	walkContainer(coolingData["fanTraySlots"], func(trayName string, tray map[string]any) {
+		t.collectContainerFans(fmt.Sprintf("FanTraySlot/%s", trayName), tray, &fans, &fanIssues)
+	})
 
-	// Check individual fans
-	if fans, ok := coolingData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkIndividualFan(fanName, fan, &fanIssues)
-			}
-		}
-	}
+	// Top-level individual fans (chassis fans without a tray).
+	walkContainer(coolingData["fans"], func(fanName string, fan map[string]any) {
+		fr := fanRecord(fanName, "", fan)
+		fans = append(fans, fr)
+		t.checkFanStatus(fr.Name, fan, &fanIssues)
+	})
 
+	// Always populate Details so the report shows what was checked,
+	// even on a clean pass.
+	details := map[string]any{
+		"fan_count": len(fans),
+		"fans":      fans,
+	}
+	if v, ok := coolingData["coolingMode"].(string); ok {
+		details["cooling_mode"] = v
+	}
+	if v, ok := coolingData["airflowDirection"].(string); ok {
+		details["airflow_direction"] = v
+	}
+	if v, ok := coolingData["ambientTemperature"].(float64); ok {
+		details["ambient_temperature_c"] = v
+	}
 	if len(fanIssues) > 0 {
+		details["issues"] = fanIssues
+	}
+	result.Details = details
+
+	switch {
+	case len(fans) == 0:
+		result.Status = test.TestError
+		result.Message = "No fans found in cooling output (unexpected on a physical platform)"
+	case len(fanIssues) > 0:
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Cooling fan issues: %v", fanIssues)
+	default:
+		result.Message = fmt.Sprintf("%d fans, all Ok", len(fans))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyEnvironmentCooling) checkPowerSupplyFans(psName string, psData map[string]any, issues *[]string) {
-	if fans, ok := psData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkFanStatus(fmt.Sprintf("%s/%s", psName, fanName), fan, issues)
+// collectContainerFans walks a power-supply or fan-tray entry,
+// extracting its inner fans and appending to the report slice.
+func (t *VerifyEnvironmentCooling) collectContainerFans(container string, entry map[string]any, fans *[]FanReport, issues *[]string) {
+	walkContainer(entry["fans"], func(fanName string, fan map[string]any) {
+		fr := fanRecord(fanName, container, fan)
+		*fans = append(*fans, fr)
+		t.checkFanStatus(fr.Name, fan, issues)
+	})
+}
+
+// walkContainer iterates an EOS sub-object that can come back as either
+// a {label → entry} map or a [entry,…] list. EOS varies by platform.
+func walkContainer(raw any, cb func(name string, entry map[string]any)) {
+	switch c := raw.(type) {
+	case map[string]any:
+		for name, val := range c {
+			if entry, ok := val.(map[string]any); ok {
+				cb(name, entry)
 			}
+		}
+	case []any:
+		for i, val := range c {
+			entry, ok := val.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := fmt.Sprintf("%d", i+1)
+			if lbl, ok := entry["label"].(string); ok && lbl != "" {
+				name = lbl
+			}
+			cb(name, entry)
 		}
 	}
 }
 
-func (t *VerifyEnvironmentCooling) checkFanTray(fanTrayName string, fanTrayData map[string]any, issues *[]string) {
-	if fans, ok := fanTrayData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkFanStatus(fmt.Sprintf("%s/%s", fanTrayName, fanName), fan, issues)
-			}
-		}
+func fanRecord(name, container string, fan map[string]any) FanReport {
+	fr := FanReport{
+		Name:      name,
+		Container: container,
 	}
-}
-
-func (t *VerifyEnvironmentCooling) checkIndividualFan(fanName string, fanData map[string]any, issues *[]string) {
-	t.checkFanStatus(fanName, fanData, issues)
+	if v, ok := fan["status"].(string); ok {
+		fr.Status = v
+	}
+	if v, ok := fan["label"].(string); ok {
+		fr.Label = v
+	}
+	if v, ok := fan["actualSpeed"].(float64); ok {
+		fr.ActualSpeedPct = int(v)
+	}
+	if v, ok := fan["configuredSpeed"].(float64); ok {
+		fr.ConfiguredPct = int(v)
+	}
+	// Some EOS variants expose absolute RPM under "speed" instead of
+	// percent. Capture for completeness; the report shows both fields.
+	if v, ok := fan["speed"].(float64); ok && v > 100 {
+		fr.ActualSpeedRPM = int(v)
+	}
+	return fr
 }
 
 func (t *VerifyEnvironmentCooling) checkFanStatus(fanName string, fanData map[string]any, issues *[]string) {
