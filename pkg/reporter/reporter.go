@@ -117,6 +117,9 @@ type psuRow struct {
 	StatusClass string
 	InputV      string
 	OutputState string
+	OutputPower string // formatted "287 W"
+	Capacity    string // formatted "3000 W"
+	LoadPct     string // formatted "9%" (output / capacity)
 }
 
 type kvRow struct {
@@ -369,6 +372,17 @@ func psusBlock(items []any) detailBlock {
 		row.StatusClass = statusClassFor(row.State)
 		if v, ok := m["input_voltage"].(float64); ok {
 			row.InputV = fmt.Sprintf("%.1f V", v)
+		}
+		power, _ := m["output_power_w"].(float64)
+		capacity, _ := m["capacity_w"].(float64)
+		if power > 0 {
+			row.OutputPower = fmt.Sprintf("%.0f W", power)
+		}
+		if capacity > 0 {
+			row.Capacity = fmt.Sprintf("%.0f W", capacity)
+			if power > 0 {
+				row.LoadPct = fmt.Sprintf("%.0f%%", 100*power/capacity)
+			}
 		}
 		out.PSUs = append(out.PSUs, row)
 	}

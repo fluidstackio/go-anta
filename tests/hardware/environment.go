@@ -412,6 +412,23 @@ func NewVerifyEnvironmentPower(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// PSUReport is the structured record of one power supply, surfaced
+// in TestResult.Details so the HTML reporter renders a typed table
+// instead of opaque JSON. JSON keys mirror what pkg/reporter's
+// psusBlock looks for (slot, model, state, input_voltage,
+// output_state, capacity_w, output_power_w).
+type PSUReport struct {
+	Slot          string  `json:"slot"`
+	Model         string  `json:"model,omitempty"`
+	State         string  `json:"state"`
+	InputVoltage  float64 `json:"input_voltage,omitempty"`
+	OutputVoltage float64 `json:"output_voltage,omitempty"`
+	OutputCurrent float64 `json:"output_current,omitempty"`
+	OutputPowerW  float64 `json:"output_power_w,omitempty"`
+	CapacityW     float64 `json:"capacity_w,omitempty"`
+	OutputState   string  `json:"output_state,omitempty"`
+}
+
 func (t *VerifyEnvironmentPower) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -445,28 +462,92 @@ func (t *VerifyEnvironmentPower) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	var psus []PSUReport
 	powerIssues := []string{}
 
-	if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
-		for psName, psData := range powerSupplies {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupply(psName, ps, &powerIssues)
-			}
-		}
-	} else if powerSupplySlots, ok := powerData["powerSupplySlots"].(map[string]any); ok {
-		for psName, psData := range powerSupplySlots {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupply(psName, ps, &powerIssues)
-			}
-		}
+	// EOS surfaces PSUs under either `powerSupplies` (common) or
+	// `powerSupplySlots` (some platforms), and as either a {slot →
+	// entry} map or a list. walkContainer handles both shapes.
+	collect := func(name string, ps map[string]any) {
+		r := psuRecord(name, ps)
+		psus = append(psus, r)
+		t.checkPowerSupply(r.Slot, ps, &powerIssues)
+	}
+	switch {
+	case powerData["powerSupplies"] != nil:
+		walkContainer(powerData["powerSupplies"], collect)
+	case powerData["powerSupplySlots"] != nil:
+		walkContainer(powerData["powerSupplySlots"], collect)
 	}
 
+	details := map[string]any{
+		"psu_count":      len(psus),
+		"power_supplies": psus,
+	}
+	var totalCap, totalDraw float64
+	for _, p := range psus {
+		totalCap += p.CapacityW
+		totalDraw += p.OutputPowerW
+	}
+	if totalCap > 0 {
+		details["total_capacity_w"] = totalCap
+	}
+	if totalDraw > 0 {
+		details["total_draw_w"] = totalDraw
+	}
 	if len(powerIssues) > 0 {
+		details["issues"] = powerIssues
+	}
+	result.Details = details
+
+	switch {
+	case len(psus) == 0:
+		result.Status = test.TestError
+		result.Message = "No power supplies found (unexpected on a physical platform)"
+	case len(powerIssues) > 0:
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Power supply issues: %v", powerIssues)
+	default:
+		result.Message = fmt.Sprintf("%d power supplies, all Ok", len(psus))
 	}
 
 	return result, nil
+}
+
+// psuRecord extracts the structured PSU shape from EOS's raw JSON.
+// EOS varies: some platforms use `state`, others `status`; capacity
+// can be missing on lower-end models. We capture whatever is there.
+func psuRecord(name string, ps map[string]any) PSUReport {
+	r := PSUReport{Slot: name}
+	if v, ok := ps["state"].(string); ok && v != "" {
+		r.State = v
+	} else if v, ok := ps["status"].(string); ok {
+		r.State = v
+	}
+	if v, ok := ps["modelName"].(string); ok {
+		r.Model = v
+	} else if v, ok := ps["model"].(string); ok {
+		r.Model = v
+	}
+	if v, ok := ps["outputState"].(string); ok {
+		r.OutputState = v
+	}
+	if v, ok := ps["inputVoltage"].(float64); ok {
+		r.InputVoltage = v
+	}
+	if v, ok := ps["outputVoltage"].(float64); ok {
+		r.OutputVoltage = v
+	}
+	if v, ok := ps["outputCurrent"].(float64); ok {
+		r.OutputCurrent = v
+	}
+	if v, ok := ps["outputPower"].(float64); ok {
+		r.OutputPowerW = v
+	}
+	if v, ok := ps["capacity"].(float64); ok {
+		r.CapacityW = v
+	}
+	return r
 }
 
 func (t *VerifyEnvironmentPower) checkPowerSupply(psName string, psData map[string]any, issues *[]string) {

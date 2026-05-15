@@ -61,8 +61,8 @@ func TestRender_ContainsDeviceAndStatus(t *testing.T) {
 		"Hostname is &#39;leaf1-old&#39;", // HTML-escaped
 		"<dt>Actual</dt>",                 // Details rendered as summary kv
 		"<dd>leaf1-old</dd>",
-		"smoke",                                 // title
-		"3s",                                    // duration
+		"smoke", // title
+		"3s",    // duration
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("rendered HTML missing %q", want)
@@ -158,16 +158,16 @@ func TestRender_FansTable(t *testing.T) {
 	}
 	s := string(body)
 	for _, want := range []string{
-		`class="detail"`,                // table renders
-		`class="icon fan"`,              // icon appears
-		`class="pill success"`,          // ok status colored
-		`class="pill failure"`,          // failed status colored
-		"FanTraySlot/1",                 // container shown
-		"1/1",                           // label shown
-		"29%",                           // speed shown
-		`<dt>Cooling mode</dt>`,         // summary key-value
-		`<dd>automatic</dd>`,            // summary value
-		`<dt>Airflow direction</dt>`,    // humanized snake_case key
+		`class="detail"`,             // table renders
+		`class="icon fan"`,           // icon appears
+		`class="pill success"`,       // ok status colored
+		`class="pill failure"`,       // failed status colored
+		"FanTraySlot/1",              // container shown
+		"1/1",                        // label shown
+		"29%",                        // speed shown
+		`<dt>Cooling mode</dt>`,      // summary key-value
+		`<dd>automatic</dd>`,         // summary value
+		`<dt>Airflow direction</dt>`, // humanized snake_case key
 		`<dd>frontToBackAirflow</dd>`,
 	} {
 		if !strings.Contains(s, want) {
@@ -193,11 +193,17 @@ func TestRender_PSUsTable(t *testing.T) {
 				Details: map[string]any{
 					"power_supplies": []any{
 						map[string]any{
-							"slot":          "PSU1",
-							"model":         "PWR-500AC-F",
-							"state":         "ok",
-							"output_state":  "powered",
-							"input_voltage": float64(228.5),
+							"slot":           "1",
+							"model":          "PWR-3001-AC-RED",
+							"state":          "ok",
+							"input_voltage":  float64(207.5),
+							"output_power_w": float64(276.5),
+							"capacity_w":     float64(3000),
+						},
+						map[string]any{
+							"slot":  "2",
+							"model": "PWR-3001-AC-RED",
+							"state": "failed",
 						},
 					},
 				},
@@ -208,10 +214,13 @@ func TestRender_PSUsTable(t *testing.T) {
 	s := string(body)
 	for _, want := range []string{
 		`class="icon psu"`,
-		"PSU1",
-		"PWR-500AC-F",
-		"228.5 V",
-		`class="pill success"`,
+		"PWR-3001-AC-RED",
+		"207.5 V",
+		"276 W",                // output power rounded (Go bankers' rounding)
+		"3000 W",               // capacity
+		"9%",                   // load = 276.5/3000 = 9.2% → "9%"
+		`class="pill success"`, // PSU 1 ok
+		`class="pill failure"`, // PSU 2 failed
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("rendered HTML missing %q", want)

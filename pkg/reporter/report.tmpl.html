@@ -501,7 +501,18 @@
 
 {{ define "psusTable" }}
 <table class="detail">
-  <thead><tr><th></th><th>Slot</th><th>Model</th><th>State</th><th>Output</th><th>Input V</th></tr></thead>
+  <thead>
+    <tr>
+      <th></th>
+      <th>Slot</th>
+      <th>Model</th>
+      <th>State</th>
+      <th>Input V</th>
+      <th>Output</th>
+      <th>Capacity</th>
+      <th>Load</th>
+    </tr>
+  </thead>
   <tbody>
     {{- range .PSUs }}
     <tr>
@@ -509,8 +520,10 @@
       <td class="mono">{{ if .Slot }}{{ .Slot }}{{ else }}—{{ end }}</td>
       <td class="mono">{{ if .Model }}{{ .Model }}{{ else }}—{{ end }}</td>
       <td><span class="pill {{ .StatusClass }}">{{ if .State }}{{ .State }}{{ else }}—{{ end }}</span></td>
-      <td class="mono">{{ if .OutputState }}{{ .OutputState }}{{ else }}—{{ end }}</td>
       <td class="num">{{ if .InputV }}{{ .InputV }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .OutputPower }}{{ .OutputPower }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .Capacity }}{{ .Capacity }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .LoadPct }}{{ .LoadPct }}{{ else }}—{{ end }}</td>
     </tr>
     {{- end }}
   </tbody>
