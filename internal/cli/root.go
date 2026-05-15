@@ -36,7 +36,10 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.go-anta.yaml)")
+	// --config has no short flag; -c is reserved for nrfu's --catalog
+	// which is far more commonly typed than the rarely-overridden
+	// config file path.
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.go-anta.yaml)")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "info", "log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "", "log file path")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
