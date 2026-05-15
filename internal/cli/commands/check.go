@@ -162,5 +162,3 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
-
-

@@ -17,10 +17,10 @@ import (
 // network performance and reliability.
 //
 // The test performs the following checks:
-//   1. Retrieves adverse drop counters from all interfaces and forwarding engines.
-//   2. Compares drop counts against configurable thresholds.
-//   3. Identifies interfaces or engines with excessive drop rates.
-//   4. Reports drop statistics and threshold violations.
+//  1. Retrieves adverse drop counters from all interfaces and forwarding engines.
+//  2. Compares drop counts against configurable thresholds.
+//  3. Identifies interfaces or engines with excessive drop rates.
+//  4. Reports drop statistics and threshold violations.
 //
 // Expected Results:
 //   - Success: All adverse drop counters are below defined thresholds.
@@ -28,19 +28,20 @@ import (
 //   - Error: Unable to retrieve adverse drop statistics.
 //
 // Examples:
+//
 //   - name: VerifyAdverseDrops basic check
 //     VerifyAdverseDrops: {}
 //
 //   - name: VerifyAdverseDrops with custom thresholds
 //     VerifyAdverseDrops:
-//       max_drops: 1000
-//       check_interfaces: true
-//       check_forwarding_engines: true
+//     max_drops: 1000
+//     check_interfaces: true
+//     check_forwarding_engines: true
 type VerifyAdverseDrops struct {
 	test.BaseTest
-	MaxDrops                 int64 `yaml:"max_drops,omitempty" json:"max_drops,omitempty"`
-	CheckInterfaces          bool  `yaml:"check_interfaces,omitempty" json:"check_interfaces,omitempty"`
-	CheckForwardingEngines   bool  `yaml:"check_forwarding_engines,omitempty" json:"check_forwarding_engines,omitempty"`
+	MaxDrops               int64 `yaml:"max_drops,omitempty" json:"max_drops,omitempty"`
+	CheckInterfaces        bool  `yaml:"check_interfaces,omitempty" json:"check_interfaces,omitempty"`
+	CheckForwardingEngines bool  `yaml:"check_forwarding_engines,omitempty" json:"check_forwarding_engines,omitempty"`
 }
 
 func NewVerifyAdverseDrops(inputs map[string]any) (test.Test, error) {
@@ -181,10 +182,10 @@ func (t *VerifyAdverseDrops) ValidateInput(input any) error {
 // availability and seamless failover in case of primary supervisor failure.
 //
 // The test performs the following checks:
-//   1. Retrieves supervisor redundancy status and configuration.
-//   2. Validates that redundancy is enabled and properly configured.
-//   3. Checks the status of both primary and standby supervisors.
-//   4. Verifies synchronization state between supervisors.
+//  1. Retrieves supervisor redundancy status and configuration.
+//  2. Validates that redundancy is enabled and properly configured.
+//  3. Checks the status of both primary and standby supervisors.
+//  4. Verifies synchronization state between supervisors.
 //
 // Expected Results:
 //   - Success: Supervisor redundancy is properly configured and operational.
@@ -192,12 +193,13 @@ func (t *VerifyAdverseDrops) ValidateInput(input any) error {
 //   - Error: Unable to retrieve supervisor redundancy information.
 //
 // Examples:
+//
 //   - name: VerifySupervisorRedundancy basic check
 //     VerifySupervisorRedundancy: {}
 //
 //   - name: VerifySupervisorRedundancy with protocol validation
 //     VerifySupervisorRedundancy:
-//       expected_protocol: "rpr"  # Route Processor Redundancy
+//     expected_protocol: "rpr"  # Route Processor Redundancy
 type VerifySupervisorRedundancy struct {
 	test.BaseTest
 	ExpectedProtocol string `yaml:"expected_protocol,omitempty" json:"expected_protocol,omitempty"`
@@ -317,10 +319,10 @@ func (t *VerifySupervisorRedundancy) ValidateInput(input any) error {
 // or device malfunctions that could impact system stability and performance.
 //
 // The test performs the following checks:
-//   1. Retrieves PCIe error counters for all PCIe devices.
-//   2. Validates that error counts are within acceptable thresholds.
-//   3. Checks for correctable and uncorrectable error types.
-//   4. Reports devices with excessive error rates.
+//  1. Retrieves PCIe error counters for all PCIe devices.
+//  2. Validates that error counts are within acceptable thresholds.
+//  3. Checks for correctable and uncorrectable error types.
+//  4. Reports devices with excessive error rates.
 //
 // Expected Results:
 //   - Success: All PCIe devices have error counts within acceptable limits.
@@ -328,13 +330,14 @@ func (t *VerifySupervisorRedundancy) ValidateInput(input any) error {
 //   - Error: Unable to retrieve PCIe error counter data.
 //
 // Examples:
+//
 //   - name: VerifyPCIeErrors basic check
 //     VerifyPCIeErrors: {}
 //
 //   - name: VerifyPCIeErrors with custom thresholds
 //     VerifyPCIeErrors:
-//       max_correctable_errors: 10
-//       max_uncorrectable_errors: 0
+//     max_correctable_errors: 10
+//     max_uncorrectable_errors: 0
 type VerifyPCIeErrors struct {
 	test.BaseTest
 	MaxCorrectableErrors   int64 `yaml:"max_correctable_errors,omitempty" json:"max_correctable_errors,omitempty"`
@@ -461,10 +464,10 @@ func (t *VerifyPCIeErrors) ValidateInput(input any) error {
 // unsupported or problematic hardware is not present.
 //
 // The test performs the following checks:
-//   1. Retrieves the complete device inventory including all linecards.
-//   2. Searches for the presence of specified linecard models or types.
-//   3. Reports if any prohibited linecards are found.
-//   4. Optionally validates slot positions of detected linecards.
+//  1. Retrieves the complete device inventory including all linecards.
+//  2. Searches for the presence of specified linecard models or types.
+//  3. Reports if any prohibited linecards are found.
+//  4. Optionally validates slot positions of detected linecards.
 //
 // Expected Results:
 //   - Success: None of the specified linecards are present in the device.
@@ -472,14 +475,15 @@ func (t *VerifyPCIeErrors) ValidateInput(input any) error {
 //   - Error: Unable to retrieve device inventory.
 //
 // Examples:
+//
 //   - name: VerifyAbsenceOfLinecards basic check
 //     VerifyAbsenceOfLinecards:
-//       linecard_models: ["7500E-36Q", "7500E-72S"]
+//     linecard_models: ["7500E-36Q", "7500E-72S"]
 //
 //   - name: VerifyAbsenceOfLinecards with slot validation
 //     VerifyAbsenceOfLinecards:
-//       linecard_models: ["DCS-7500E-36Q-LC"]
-//       check_slots: true
+//     linecard_models: ["DCS-7500E-36Q-LC"]
+//     check_slots: true
 type VerifyAbsenceOfLinecards struct {
 	test.BaseTest
 	LinecardModels []string `yaml:"linecard_models" json:"linecard_models"`

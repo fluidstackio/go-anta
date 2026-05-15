@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fluidstackio/go-anta/pkg/device"
 	"github.com/fluidstackio/go-anta/internal/logger"
+	"github.com/fluidstackio/go-anta/pkg/device"
 )
 
 type Runner struct {
@@ -42,7 +42,7 @@ func (r *Runner) Run(ctx context.Context, tests []TestDefinition, devices []devi
 
 	jobs := make(chan testJob, totalTests)
 	results := make(chan TestResult, totalTests)
-	
+
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, r.maxConcurrency)
 
@@ -186,4 +186,3 @@ func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device
 
 	return *execResult
 }
-

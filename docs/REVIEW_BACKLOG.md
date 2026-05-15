@@ -146,8 +146,8 @@ Extract one shared `loadNetboxInventoryShared(ctx, opts NetboxOpts) (*inventory.
 - **R22. TLS posture** (`pkg/device/eos.go:35-50`). `MinVersion: TLS 1.0` + explicit ciphers that exclude modern AEAD on TLS 1.2. Default to TLS 1.2 minimum, drop the explicit list, make legacy opt-in.
 - **R23. Catalog field name mismatches.** Various tests' YAML docs claim `domain_names:` vs code reads `fqdn:` etc. Cross-walk docs vs code (the reviewer found several).
 - **R24. Netbox `device_role` vs `role` schema drift** (`pkg/inventory/netbox.go:93`). Netbox 4.x renamed the field. Add both names or version-detect.
-- **R25. `cmd/test-catalog/` is an empty directory** — delete it.
-- **R26. `cmd/debug` and `cmd/debug-json` are separate binaries** that hand-roll eAPI payloads — drift risk. Port to subcommands or delete.
+- ~~**R25. `cmd/test-catalog/` is an empty directory**~~ — deleted in the cleanup pass after PR #18, along with `web/`, `internal/web/`, `internal/catalog/`, `internal/api/` (all empty).
+- ~~**R26. `cmd/debug-json`** — deleted~~. It only printed a hardcoded `show version` JSON payload plus a curl example with placeholder credentials; no device interaction. `cmd/debug` stays — it's used by `examples/wdl101-inventory.yaml` smoke-testing and was the workhorse for the gNOI verification in PR #16.
 
 ### LOW
 

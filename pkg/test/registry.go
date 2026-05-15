@@ -62,4 +62,3 @@ func (r *Registry) GetTestWithInputs(module, name string, inputs map[string]inte
 
 	return factory(inputs)
 }
-

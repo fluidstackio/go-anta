@@ -16,11 +16,11 @@ import (
 // local interface status, and peer link status to ensure proper redundancy operation.
 //
 // The test performs the following checks:
-//   1. Verifies that MLAG is enabled on the device.
-//   2. Validates that the MLAG state is 'active'.
-//   3. Confirms that negotiation status is 'connected'.
-//   4. Checks that local interface status is operational.
-//   5. Ensures peer link status is healthy.
+//  1. Verifies that MLAG is enabled on the device.
+//  2. Validates that the MLAG state is 'active'.
+//  3. Confirms that negotiation status is 'connected'.
+//  4. Checks that local interface status is operational.
+//  5. Ensures peer link status is healthy.
 //
 // Expected Results:
 //   - Success: The test will pass if MLAG is active with proper negotiation and interface states.
@@ -29,12 +29,13 @@ import (
 //   - Skipped: The test will be skipped if MLAG is disabled on the device.
 //
 // Examples:
+//
 //   - name: VerifyMlagStatus basic check
 //     VerifyMlagStatus: {}
 //
 //   - name: VerifyMlagStatus comprehensive validation
 //     VerifyMlagStatus:
-//       # No parameters needed - validates overall MLAG health
+//     # No parameters needed - validates overall MLAG health
 type VerifyMlagStatus struct {
 	test.BaseTest
 }
@@ -146,10 +147,10 @@ func (t *VerifyMlagStatus) ValidateInput(input any) error {
 // with the MLAG configuration or connectivity.
 //
 // The test performs the following checks:
-//   1. Verifies that MLAG is enabled and active on the device.
-//   2. Examines all MLAG interface states.
-//   3. Identifies any interfaces in 'inactive' or 'active-partial' states.
-//   4. Reports failures for problematic interface states.
+//  1. Verifies that MLAG is enabled and active on the device.
+//  2. Examines all MLAG interface states.
+//  3. Identifies any interfaces in 'inactive' or 'active-partial' states.
+//  4. Reports failures for problematic interface states.
 //
 // Expected Results:
 //   - Success: The test will pass if all MLAG interfaces are in proper active states.
@@ -158,12 +159,13 @@ func (t *VerifyMlagStatus) ValidateInput(input any) error {
 //   - Skipped: The test will be skipped if MLAG is disabled on the device.
 //
 // Examples:
+//
 //   - name: VerifyMlagInterfaces basic check
 //     VerifyMlagInterfaces: {}
 //
 //   - name: VerifyMlagInterfaces comprehensive validation
 //     VerifyMlagInterfaces:
-//       # No parameters needed - validates all MLAG interface states
+//     # No parameters needed - validates all MLAG interface states
 type VerifyMlagInterfaces struct {
 	test.BaseTest
 }
@@ -269,10 +271,10 @@ func (t *VerifyMlagInterfaces) ValidateInput(input any) error {
 // interface-specific configuration problems.
 //
 // The test performs the following checks:
-//   1. Verifies that MLAG is active on the device.
-//   2. Examines configuration sanity results from the EOS system.
-//   3. Identifies any global or interface configuration inconsistencies.
-//   4. Reports specific configuration mismatches between MLAG peers.
+//  1. Verifies that MLAG is active on the device.
+//  2. Examines configuration sanity results from the EOS system.
+//  3. Identifies any global or interface configuration inconsistencies.
+//  4. Reports specific configuration mismatches between MLAG peers.
 //
 // Expected Results:
 //   - Success: The test will pass if no configuration inconsistencies are detected.
@@ -281,12 +283,13 @@ func (t *VerifyMlagInterfaces) ValidateInput(input any) error {
 //   - Skipped: The test will be skipped if MLAG is not active on the device.
 //
 // Examples:
+//
 //   - name: VerifyMlagConfigSanity basic check
 //     VerifyMlagConfigSanity: {}
 //
 //   - name: VerifyMlagConfigSanity comprehensive validation
 //     VerifyMlagConfigSanity:
-//       # No parameters needed - validates configuration consistency
+//     # No parameters needed - validates configuration consistency
 type VerifyMlagConfigSanity struct {
 	test.BaseTest
 }
@@ -422,10 +425,10 @@ func (t *VerifyMlagConfigSanity) ValidateInput(input any) error {
 // to prevent network loops and ensure proper MLAG synchronization.
 //
 // The test performs the following checks:
-//   1. Verifies that MLAG is enabled on the device.
-//   2. Validates the configured reload delay for MLAG ports.
-//   3. Checks the configured reload delay for non-MLAG ports.
-//   4. Compares actual delays against expected values if specified.
+//  1. Verifies that MLAG is enabled on the device.
+//  2. Validates the configured reload delay for MLAG ports.
+//  3. Checks the configured reload delay for non-MLAG ports.
+//  4. Compares actual delays against expected values if specified.
 //
 // Expected Results:
 //   - Success: The test will pass if reload delay configurations match expected values.
@@ -434,14 +437,15 @@ func (t *VerifyMlagConfigSanity) ValidateInput(input any) error {
 //   - Skipped: The test will be skipped if MLAG is disabled on the device.
 //
 // Examples:
+//
 //   - name: VerifyMlagReloadDelay with specific delays
 //     VerifyMlagReloadDelay:
-//       reload_delay: 300
-//       reload_delay_non_mlag: 330
+//     reload_delay: 300
+//     reload_delay_non_mlag: 330
 //
 //   - name: VerifyMlagReloadDelay basic check
 //     VerifyMlagReloadDelay:
-//       reload_delay: 240
+//     reload_delay: 240
 type VerifyMlagReloadDelay struct {
 	test.BaseTest
 	ReloadDelay        *int `yaml:"reload_delay,omitempty" json:"reload_delay,omitempty"`
@@ -570,11 +574,11 @@ func (t *VerifyMlagReloadDelay) ValidateInput(input any) error {
 // settings, and error handling parameters.
 //
 // The test performs the following checks:
-//   1. Verifies that MLAG is enabled on the device.
-//   2. Validates dual-primary detection delay configuration.
-//   3. Checks recovery delay settings for dual-primary scenarios.
-//   4. Confirms error handling and interface disabling behavior.
-//   5. Validates primary priority settings if configured.
+//  1. Verifies that MLAG is enabled on the device.
+//  2. Validates dual-primary detection delay configuration.
+//  3. Checks recovery delay settings for dual-primary scenarios.
+//  4. Confirms error handling and interface disabling behavior.
+//  5. Validates primary priority settings if configured.
 //
 // Expected Results:
 //   - Success: The test will pass if dual-primary detection parameters match expected values.
@@ -583,16 +587,17 @@ func (t *VerifyMlagReloadDelay) ValidateInput(input any) error {
 //   - Skipped: The test will be skipped if MLAG is disabled on the device.
 //
 // Examples:
+//
 //   - name: VerifyMlagDualPrimary with detection delay
 //     VerifyMlagDualPrimary:
-//       detection_delay: 200
-//       recovery_delay: 3600
-//       errdisabled: true
+//     detection_delay: 200
+//     recovery_delay: 3600
+//     errdisabled: true
 //
 //   - name: VerifyMlagDualPrimary with priority
 //     VerifyMlagDualPrimary:
-//       detection_delay: 120
-//       primary_priority: 100
+//     detection_delay: 120
+//     primary_priority: 100
 type VerifyMlagDualPrimary struct {
 	test.BaseTest
 	DetectionDelay  *int  `yaml:"detection_delay,omitempty" json:"detection_delay,omitempty"`
@@ -744,10 +749,10 @@ func (t *VerifyMlagDualPrimary) ValidateInput(input any) error {
 // Supporting data structures
 
 type MlagInfo struct {
-	State              string
-	NegotiationStatus  string
-	LocalIntfStatus    string
-	PeerLinkStatus     string
+	State             string
+	NegotiationStatus string
+	LocalIntfStatus   string
+	PeerLinkStatus    string
 }
 
 type MlagInterfaceInfo struct {

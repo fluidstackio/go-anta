@@ -27,10 +27,10 @@ import (
 //   - name: "VerifyTransceivers"
 //     module: "hardware"
 //     inputs:
-//       check_manufacturer: true
-//       manufacturers: ["Arista Networks", "Finisar"]
-//       check_temperature: true
-//       check_voltage: true
+//     check_manufacturer: true
+//     manufacturers: ["Arista Networks", "Finisar"]
+//     check_temperature: true
+//     check_voltage: true
 type VerifyTransceivers struct {
 	test.BaseTest
 	CheckManufacturer bool     `yaml:"check_manufacturer" json:"check_manufacturer"`
@@ -100,7 +100,7 @@ func (t *VerifyTransceivers) Execute(ctx context.Context, dev device.Device) (*t
 	}
 
 	issues := []string{}
-	
+
 	if transceiverData, ok := cmdResult.Output.(map[string]any); ok {
 		if interfaces, ok := transceiverData["interfaces"].(map[string]any); ok {
 			for intfName, intfData := range interfaces {
@@ -143,7 +143,7 @@ func (t *VerifyTransceivers) validateTransceiver(intfName string, data map[strin
 				if temp, ok := tempData["temp"].(float64); ok {
 					if highAlarm, ok := tempData["highAlarm"].(float64); ok {
 						if temp >= highAlarm {
-							*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C exceeds high alarm %.1f°C", 
+							*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C exceeds high alarm %.1f°C",
 								intfName, temp, highAlarm))
 						}
 					}
@@ -205,10 +205,10 @@ func (t *VerifyTransceivers) ValidateInput(input any) error {
 // and avoiding potential compatibility or support issues.
 //
 // The test performs the following checks:
-//   1. Retrieves the complete transceiver inventory from the device.
-//   2. Extracts manufacturer information for each transceiver.
-//   3. Validates each manufacturer against the approved list.
-//   4. Reports any transceivers from unauthorized manufacturers.
+//  1. Retrieves the complete transceiver inventory from the device.
+//  2. Extracts manufacturer information for each transceiver.
+//  3. Validates each manufacturer against the approved list.
+//  4. Reports any transceivers from unauthorized manufacturers.
 //
 // Expected Results:
 //   - Success: All transceivers are from approved manufacturers.
@@ -216,13 +216,14 @@ func (t *VerifyTransceivers) ValidateInput(input any) error {
 //   - Error: Unable to retrieve transceiver inventory or manufacturer data.
 //
 // Examples:
+//
 //   - name: VerifyTransceiversManufacturers strict validation
 //     VerifyTransceiversManufacturers:
-//       manufacturers: ["Arista Networks", "Finisar", "JDSU"]
+//     manufacturers: ["Arista Networks", "Finisar", "JDSU"]
 //
 //   - name: VerifyTransceiversManufacturers with additional vendors
 //     VerifyTransceiversManufacturers:
-//       manufacturers: ["Arista Networks", "Finisar", "JDSU", "Mellanox", "Intel"]
+//     manufacturers: ["Arista Networks", "Finisar", "JDSU", "Mellanox", "Intel"]
 type VerifyTransceiversManufacturers struct {
 	test.BaseTest
 	Manufacturers []string `yaml:"manufacturers" json:"manufacturers"`
@@ -327,10 +328,10 @@ func (t *VerifyTransceiversManufacturers) ValidateInput(input any) error {
 // or environmental issues that could lead to performance degradation or failure.
 //
 // The test performs the following checks:
-//   1. Retrieves temperature data for all transceivers.
-//   2. Compares current temperatures against high alarm and warning thresholds.
-//   3. Applies configurable margin to warning thresholds for early detection.
-//   4. Reports transceivers approaching or exceeding thermal limits.
+//  1. Retrieves temperature data for all transceivers.
+//  2. Compares current temperatures against high alarm and warning thresholds.
+//  3. Applies configurable margin to warning thresholds for early detection.
+//  4. Reports transceivers approaching or exceeding thermal limits.
 //
 // Expected Results:
 //   - Success: All transceivers are operating within acceptable temperature ranges.
@@ -338,12 +339,13 @@ func (t *VerifyTransceiversManufacturers) ValidateInput(input any) error {
 //   - Error: Unable to retrieve transceiver temperature data.
 //
 // Examples:
+//
 //   - name: VerifyTransceiversTemperature standard check
 //     VerifyTransceiversTemperature: {}
 //
 //   - name: VerifyTransceiversTemperature with custom margin
 //     VerifyTransceiversTemperature:
-//       temp_warning_margin: 10.0  # degrees Celsius margin before warning threshold
+//     temp_warning_margin: 10.0  # degrees Celsius margin before warning threshold
 type VerifyTransceiversTemperature struct {
 	test.BaseTest
 	TempWarningMargin float64 `yaml:"temp_warning_margin,omitempty" json:"temp_warning_margin,omitempty"`
@@ -478,4 +480,3 @@ func (t *VerifyTransceiversTemperature) ValidateInput(input any) error {
 	}
 	return nil
 }
-

@@ -195,14 +195,15 @@ func (t *VerifyLoggingPersistent) ValidateInput(input any) error {
 //   - Error: The test will report an error if logging configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLoggingSourceIntf with specific VRF
 //     VerifyLoggingSourceIntf:
-//       interface: "Management1"
-//       vrf: "MGMT"
+//     interface: "Management1"
+//     vrf: "MGMT"
 //
 //   - name: VerifyLoggingSourceIntf default VRF
 //     VerifyLoggingSourceIntf:
-//       interface: "Loopback0"
+//     interface: "Loopback0"
 type VerifyLoggingSourceIntf struct {
 	test.BaseTest
 	Interface string `yaml:"interface" json:"interface"`
@@ -327,18 +328,22 @@ func (t *VerifyLoggingSourceIntf) ValidateInput(input any) error {
 //   - Error: The test will report an error if logging configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLoggingHosts with multiple servers
 //     VerifyLoggingHosts:
-//       hosts:
-//         - "10.1.1.1"
-//         - "10.1.1.2"
-//       vrf: "default"
+//     hosts:
+//
+//   - "10.1.1.1"
+//
+//   - "10.1.1.2"
+//     vrf: "default"
 //
 //   - name: VerifyLoggingHosts management VRF
 //     VerifyLoggingHosts:
-//       hosts:
-//         - "192.168.1.100"
-//       vrf: "MGMT"
+//     hosts:
+//
+//   - "192.168.1.100"
+//     vrf: "MGMT"
 type VerifyLoggingHosts struct {
 	test.BaseTest
 	Hosts []string `yaml:"hosts" json:"hosts"`
@@ -499,12 +504,13 @@ func (t *VerifyLoggingHosts) ValidateInput(input any) error {
 //   - Error: The test will report an error if log generation or retrieval fails.
 //
 // Examples:
+//
 //   - name: VerifyLoggingLogsGeneration with default severity
 //     VerifyLoggingLogsGeneration:
 //
 //   - name: VerifyLoggingLogsGeneration with specific severity
 //     VerifyLoggingLogsGeneration:
-//       severity_level: "warning"
+//     severity_level: "warning"
 type VerifyLoggingLogsGeneration struct {
 	test.BaseTest
 	SeverityLevel string `yaml:"severity_level,omitempty" json:"severity_level,omitempty"`
@@ -645,12 +651,13 @@ func (t *VerifyLoggingLogsGeneration) ValidateInput(input any) error {
 //   - Error: The test will report an error if hostname cannot be determined or logs cannot be generated/retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLoggingHostname with default severity
 //     VerifyLoggingHostname:
 //
 //   - name: VerifyLoggingHostname with specific severity
 //     VerifyLoggingHostname:
-//       severity_level: "notice"
+//     severity_level: "notice"
 type VerifyLoggingHostname struct {
 	test.BaseTest
 	SeverityLevel string `yaml:"severity_level,omitempty" json:"severity_level,omitempty"`
@@ -809,12 +816,13 @@ func (t *VerifyLoggingHostname) ValidateInput(input any) error {
 //   - Error: The test will report an error if logs cannot be generated or retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLoggingTimestamp with default severity
 //     VerifyLoggingTimestamp:
 //
 //   - name: VerifyLoggingTimestamp with specific severity
 //     VerifyLoggingTimestamp:
-//       severity_level: "debug"
+//     severity_level: "debug"
 type VerifyLoggingTimestamp struct {
 	test.BaseTest
 	SeverityLevel string `yaml:"severity_level,omitempty" json:"severity_level,omitempty"`
@@ -881,10 +889,10 @@ func (t *VerifyLoggingTimestamp) Execute(ctx context.Context, dev device.Device)
 
 	// Common timestamp patterns
 	timestampPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`),                    // ISO format: 2024-01-01T12:00:00
-		regexp.MustCompile(`^[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}`),             // Syslog format: Jan  1 12:00:00
-		regexp.MustCompile(`^\d{2}:\d{2}:\d{2}`),                                      // Time only: 12:00:00
-		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}`),                 // Date time: 2024-01-01 12:00:00
+		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`),                     // ISO format: 2024-01-01T12:00:00
+		regexp.MustCompile(`^[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}`),               // Syslog format: Jan  1 12:00:00
+		regexp.MustCompile(`^\d{2}:\d{2}:\d{2}`),                                       // Time only: 12:00:00
+		regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}`),                   // Date time: 2024-01-01 12:00:00
 		regexp.MustCompile(`^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}`), // Full format: Mon Jan  1 12:00:00
 	}
 
@@ -1106,18 +1114,19 @@ func (t *VerifyLoggingAccounting) ValidateInput(input any) error {
 //   - Error: The test will report an error if recent logs cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyLoggingErrors with default time window
 //     VerifyLoggingErrors:
 //
 //   - name: VerifyLoggingErrors with custom time window
 //     VerifyLoggingErrors:
-//       last_number_time_units: 2
-//       time_unit: "hours"
+//     last_number_time_units: 2
+//     time_unit: "hours"
 //
 //   - name: VerifyLoggingErrors check last day
 //     VerifyLoggingErrors:
-//       last_number_time_units: 1
-//       time_unit: "day"
+//     last_number_time_units: 1
+//     time_unit: "day"
 type VerifyLoggingErrors struct {
 	test.BaseTest
 	LastNumberTimeUnits int    `yaml:"last_number_time_units" json:"last_number_time_units"`

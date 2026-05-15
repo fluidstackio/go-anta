@@ -17,20 +17,24 @@ import (
 //   - Error: The test will report an error if interface status cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyInterfacesStatus with specific states
 //     VerifyInterfacesStatus:
-//       interfaces:
-//         - name: "Ethernet1/1"
-//           status: "up"
-//           protocol: "up"
-//         - name: "Ethernet2/1"
-//           status: "adminDown"
+//     interfaces:
+//
+//   - name: "Ethernet1/1"
+//     status: "up"
+//     protocol: "up"
+//
+//   - name: "Ethernet2/1"
+//     status: "adminDown"
 //
 //   - name: VerifyInterfacesStatus protocol only
 //     VerifyInterfacesStatus:
-//       interfaces:
-//         - name: "Management1"
-//           protocol: "up"
+//     interfaces:
+//
+//   - name: "Management1"
+//     protocol: "up"
 type VerifyInterfacesStatus struct {
 	test.BaseTest
 	Interfaces []InterfaceStatus `yaml:"interfaces" json:"interfaces"`
@@ -38,8 +42,8 @@ type VerifyInterfacesStatus struct {
 
 type InterfaceStatus struct {
 	Name     string `yaml:"name" json:"name"`
-	Status   string `yaml:"status,omitempty" json:"status,omitempty"`         // up, down, notPresent
-	Protocol string `yaml:"protocol,omitempty" json:"protocol,omitempty"`     // up, down, notPresent, lowerLayerDown
+	Status   string `yaml:"status,omitempty" json:"status,omitempty"`     // up, down, notPresent
+	Protocol string `yaml:"protocol,omitempty" json:"protocol,omitempty"` // up, down, notPresent, lowerLayerDown
 }
 
 func NewVerifyInterfacesStatus(inputs map[string]any) (test.Test, error) {

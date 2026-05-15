@@ -9,7 +9,7 @@ import (
 func TestApplyDefaults_OnlyFillsEmpty(t *testing.T) {
 	inv := &Inventory{
 		Devices: []device.DeviceConfig{
-			{Name: "r1", Host: "10.0.0.1"},                                   // missing creds
+			{Name: "r1", Host: "10.0.0.1"},                                  // missing creds
 			{Name: "r2", Host: "10.0.0.2", Username: "ops", Password: "p2"}, // pre-filled
 		},
 	}

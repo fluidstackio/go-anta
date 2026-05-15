@@ -25,4 +25,3 @@ func AsMap(out interface{}) (map[string]interface{}, error) {
 	}
 	return m, nil
 }
-

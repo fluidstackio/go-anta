@@ -20,7 +20,7 @@ import (
 // Examples:
 //   - name: VerifyHostname
 //     VerifyHostname:
-//       hostname: "s1-spine1"
+//     hostname: "s1-spine1"
 type VerifyHostname struct {
 	test.BaseTest
 	Hostname string `yaml:"hostname" json:"hostname"`
@@ -113,10 +113,10 @@ func (t *VerifyHostname) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyDNSLookup
 //     VerifyDNSLookup:
-//       domain_names:
-//         - "arista.com"
-//         - "www.google.com"
-//         - "github.com"
+//     domain_names:
+//   - "arista.com"
+//   - "www.google.com"
+//   - "github.com"
 type VerifyDNSLookup struct {
 	test.BaseTest
 	DomainNames []string `yaml:"domain_names" json:"domain_names"`
@@ -241,13 +241,13 @@ func (t *VerifyDNSLookup) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyDNSServers with VRF and priority
 //     VerifyDNSServers:
-//       dns_servers:
-//         - server: "8.8.8.8"
-//           vrf: "default"
-//           priority: 1
-//         - server: "8.8.4.4"
-//           vrf: "default"
-//           priority: 2
+//     dns_servers:
+//   - server: "8.8.8.8"
+//     vrf: "default"
+//     priority: 1
+//   - server: "8.8.4.4"
+//     vrf: "default"
+//     priority: 2
 type VerifyDNSServers struct {
 	test.BaseTest
 	DNSServers []DNSServer `yaml:"dns_servers" json:"dns_servers"`
@@ -412,12 +412,12 @@ func (t *VerifyDNSServers) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyErrdisableRecovery with specific reasons
 //     VerifyErrdisableRecovery:
-//       reasons:
-//         - reason: "bpduguard"
-//           status: "enabled"
-//           interval: 300
-//         - reason: "link-flap"
-//           status: "enabled"
+//     reasons:
+//   - reason: "bpduguard"
+//     status: "enabled"
+//     interval: 300
+//   - reason: "link-flap"
+//     status: "enabled"
 type VerifyErrdisableRecovery struct {
 	test.BaseTest
 	Reasons []ErrdisableRecovery `yaml:"reasons" json:"reasons"`

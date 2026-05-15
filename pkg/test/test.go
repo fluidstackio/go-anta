@@ -54,9 +54,9 @@ type TestResult struct {
 }
 
 type BaseTest struct {
-	TestName        string   `yaml:"name" json:"name"`
-	TestDescription string   `yaml:"description" json:"description"`
-	TestCategories  []string `yaml:"categories" json:"categories"`
+	TestName        string           `yaml:"name" json:"name"`
+	TestDescription string           `yaml:"description" json:"description"`
+	TestCategories  []string         `yaml:"categories" json:"categories"`
 	TestCommands    []device.Command `yaml:"commands" json:"commands"`
 }
 

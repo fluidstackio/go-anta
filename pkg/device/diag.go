@@ -43,9 +43,9 @@ type PingOpts struct {
 // PingResult aggregates a Ping streaming response.
 type PingResult struct {
 	Destination string
-	Source      string       // source IP as reported by the device
-	Echoes      []PingEcho   // one per received reply
-	Stats       PingStats    // summary statistics
+	Source      string     // source IP as reported by the device
+	Echoes      []PingEcho // one per received reply
+	Stats       PingStats  // summary statistics
 }
 
 type PingEcho struct {
@@ -58,7 +58,7 @@ type PingEcho struct {
 type PingStats struct {
 	Sent     int
 	Received int
-	Loss     float64       // 0.0 - 1.0
+	Loss     float64 // 0.0 - 1.0
 	MinRTT   time.Duration
 	AvgRTT   time.Duration
 	MaxRTT   time.Duration
@@ -107,9 +107,9 @@ type TracerouteProbe struct {
 type TracerouteState int
 
 const (
-	TracerouteStateUnknown        TracerouteState = iota
-	TracerouteStateNone                            // default — ICMP echo-reply, no special state
-	TracerouteStateICMP                            // unreachable ICMP returned
+	TracerouteStateUnknown TracerouteState = iota
+	TracerouteStateNone                    // default — ICMP echo-reply, no special state
+	TracerouteStateICMP                    // unreachable ICMP returned
 	TracerouteStateHostUnreachable
 	TracerouteStateNetworkUnreachable
 	TracerouteStateProtocolUnreachable

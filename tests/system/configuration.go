@@ -17,9 +17,9 @@ import (
 // unauthorized configuration changes and ensure controlled device provisioning.
 //
 // The test performs the following checks:
-//   1. Retrieves the ZeroTouch status from the device.
-//   2. Verifies that ZeroTouch mode is set to 'disabled'.
-//   3. Reports success if disabled, failure if enabled.
+//  1. Retrieves the ZeroTouch status from the device.
+//  2. Verifies that ZeroTouch mode is set to 'disabled'.
+//  3. Reports success if disabled, failure if enabled.
 //
 // Expected Results:
 //   - Success: The test will pass if ZeroTouch is disabled.
@@ -27,12 +27,13 @@ import (
 //   - Error: The test will report an error if ZeroTouch status cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyZeroTouch basic check
 //     VerifyZeroTouch: {}
 //
 //   - name: VerifyZeroTouch ensure disabled
 //     VerifyZeroTouch:
-//       # No parameters needed - validates ZeroTouch is disabled
+//     # No parameters needed - validates ZeroTouch is disabled
 type VerifyZeroTouch struct {
 	test.BaseTest
 }
@@ -132,9 +133,9 @@ func (t *VerifyZeroTouch) ValidateInput(input any) error {
 // could result in unexpected behavior after a device reload.
 //
 // The test performs the following checks:
-//   1. Compares the running configuration against the startup configuration.
-//   2. Identifies any differences between the two configurations.
-//   3. Reports specific configuration lines that differ.
+//  1. Compares the running configuration against the startup configuration.
+//  2. Identifies any differences between the two configurations.
+//  3. Reports specific configuration lines that differ.
 //
 // Expected Results:
 //   - Success: The test will pass if running and startup configurations are identical.
@@ -142,12 +143,13 @@ func (t *VerifyZeroTouch) ValidateInput(input any) error {
 //   - Error: The test will report an error if configuration comparison cannot be performed.
 //
 // Examples:
+//
 //   - name: VerifyRunningConfigDiffs basic check
 //     VerifyRunningConfigDiffs: {}
 //
 //   - name: VerifyRunningConfigDiffs ensure saved
 //     VerifyRunningConfigDiffs:
-//       # No parameters needed - validates configs are synchronized
+//     # No parameters needed - validates configs are synchronized
 type VerifyRunningConfigDiffs struct {
 	test.BaseTest
 }
@@ -244,9 +246,9 @@ func (t *VerifyRunningConfigDiffs) ValidateInput(input any) error {
 // compliance requirements.
 //
 // The test performs the following checks:
-//   1. Retrieves the complete running configuration from the device.
-//   2. Searches for each specified regex pattern in the configuration.
-//   3. Reports which patterns are found and which are missing.
+//  1. Retrieves the complete running configuration from the device.
+//  2. Searches for each specified regex pattern in the configuration.
+//  3. Reports which patterns are found and which are missing.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified regex patterns are found in the configuration.
@@ -254,18 +256,24 @@ func (t *VerifyRunningConfigDiffs) ValidateInput(input any) error {
 //   - Error: The test will report an error if configuration cannot be retrieved or regex compilation fails.
 //
 // Examples:
+//
 //   - name: VerifyRunningConfigLines security settings
 //     VerifyRunningConfigLines:
-//       regex_patterns:
-//         - "^aaa authentication login default"
-//         - "^ip ssh version 2"
-//         - "^banner motd"
+//     regex_patterns:
+//
+//   - "^aaa authentication login default"
+//
+//   - "^ip ssh version 2"
+//
+//   - "^banner motd"
 //
 //   - name: VerifyRunningConfigLines NTP configuration
 //     VerifyRunningConfigLines:
-//       regex_patterns:
-//         - "^ntp server [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
-//         - "^clock timezone"
+//     regex_patterns:
+//
+//   - "^ntp server [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
+//
+//   - "^clock timezone"
 type VerifyRunningConfigLines struct {
 	test.BaseTest
 	RegexPatterns []string `yaml:"regex_patterns" json:"regex_patterns"`

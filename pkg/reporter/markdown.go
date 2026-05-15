@@ -29,7 +29,7 @@ func (r *MarkdownReporter) SetFormat(format string) {
 func (r *MarkdownReporter) Report(results []test.TestResult) error {
 	fmt.Fprintln(r.output, "# GANTA Test Report")
 	fmt.Fprintln(r.output)
-	
+
 	if len(results) == 0 {
 		fmt.Fprintln(r.output, "No test results to report.")
 		return nil
@@ -74,7 +74,7 @@ func (r *MarkdownReporter) Report(results []test.TestResult) error {
 	if stats["failure"] > 0 || stats["error"] > 0 {
 		fmt.Fprintln(r.output, "## Failed Tests")
 		fmt.Fprintln(r.output)
-		
+
 		for _, result := range results {
 			if result.Status == test.TestFailure || result.Status == test.TestError {
 				fmt.Fprintf(r.output, "### %s - %s\n", result.DeviceName, result.TestName)

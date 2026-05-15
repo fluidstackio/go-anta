@@ -26,8 +26,8 @@ import (
 //   - name: "VerifyTemperature"
 //     module: "hardware"
 //     inputs:
-//       check_temp_sensors: true
-//       failure_margin: 5.0  # degrees Celsius margin before overheat
+//     check_temp_sensors: true
+//     failure_margin: 5.0  # degrees Celsius margin before overheat
 type VerifyTemperature struct {
 	test.BaseTest
 	CheckTempSensors bool    `yaml:"check_temp_sensors" json:"check_temp_sensors"`
@@ -112,13 +112,13 @@ func (t *VerifyTemperature) Execute(ctx context.Context, dev device.Device) (*te
 						alertThreshold = alert
 					}
 
-					overheatThreshold := 0.0  
+					overheatThreshold := 0.0
 					if overheat, ok := sensor["overheatThreshold"].(float64); ok {
 						overheatThreshold = overheat
 					}
 
 					if alertThreshold > 0 && currentTemp >= alertThreshold {
-						alerts = append(alerts, fmt.Sprintf("%s: current=%.1f°C, alert=%.1f°C", 
+						alerts = append(alerts, fmt.Sprintf("%s: current=%.1f°C, alert=%.1f°C",
 							sensorName, currentTemp, alertThreshold))
 					}
 
@@ -159,4 +159,3 @@ func (t *VerifyTemperature) ValidateInput(input any) error {
 	}
 	return nil
 }
-
