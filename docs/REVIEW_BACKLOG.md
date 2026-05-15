@@ -126,11 +126,24 @@ Extract one shared `loadNetboxInventoryShared(ctx, opts NetboxOpts) (*inventory.
 #### R6. `LoadFromNetbox` ignores caller's context
 `pkg/inventory/netbox.go:296-298` uses `context.Background()` and discards the passed-in ctx. After fix #17 (signal handling), this is the last layer that doesn't honor cancellation. Change the signature to accept ctx and thread it through. Breaking API change — coordinate with the v1 surface.
 
-#### R7. Catalog validation doesn't check registry membership
-`pkg/test/catalog.go`. A typo like `VerifyBGPpeers` (lowercase 'p') is not caught at parse time; instead every device gets a `TestError "Test not found"`, producing 50× duplicate errors instead of one upfront failure. Add `Catalog.ValidateAgainst(registry *Registry) error` and call it from `runNrfu` before `runner.Run`.
+#### ~~R7. Catalog validation doesn't check registry membership~~ — shipped in `fix/r7-r8-typo-detection`
 
-#### R8. Filter functions silently return empty on no match
-`pkg/inventory/inventory.go` and `pkg/test/catalog.go`. `--limit nosuchhost`, `--test nosuchname`, `FilterByTags(["typo"])` all return an empty result with no error. User sees "no tests matched, all good." Make them return `(result, error)` or at least log a warning.
+`Catalog.ValidateAgainst(*Registry)` walks every catalog entry and
+sorts unknown `(Module, Name)` tuples into a single error. Called from
+`runNrfu` after filtering. A typo like `VerifyBGPpeers` now surfaces
+once at start with `catalog references unknown test(s): [routing/VerifyBGPpeers]`
+instead of N copies of "Test not found".
+
+#### ~~R8. Filter functions silently return empty on no match~~ — shipped in `fix/r7-r8-typo-detection`
+
+All six filter functions (`Catalog.FilterByName/Module/Tags` and
+`Inventory.FilterByNames/Tags/Limit`) now return `(*Filtered, error)`.
+Error names the specific unmatched values (`no matches for device name(s): [leaf99]`
+or `--limit "nosuchhost" matched no devices`). `nrfu` and `check`
+surface filter errors as hard failures; `inventory` (an exploratory
+command) prints them as `warning:` to stderr instead. `nrfu` also now
+fails fast if devices or tests reach zero after filtering — the old
+"no tests matched, all good" silent path is gone.
 
 #### R9. `VerifyBGPExchangedRoutes` is N+1 over the device
 `tests/routing/bgp.go:1156-1219`. Two device calls per peer × routes. With 50 peers that's 100 RTTs. Same issue in `VerifyBGPPeerMPCaps`, `VerifyBGPAdvCommunities`, `VerifyBGPPeerDropStats`, `VerifyBGPPeerUpdateErrors`. The `device.Device` interface has `ExecuteBatch` (`pkg/device/device.go:15`) — use it. Test framework should expose a batched-Execute hook so all tests benefit.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -212,59 +213,65 @@ func (i *Inventory) Validate() error {
 	return nil
 }
 
-func (i *Inventory) FilterByTags(tags []string) *Inventory {
+// FilterByTags keeps devices that carry at least one of `tags`. The
+// returned error names any requested tags that matched zero devices.
+// Best-effort callers can ignore the error; the filtered inventory is
+// always returned.
+func (i *Inventory) FilterByTags(tags []string) (*Inventory, error) {
 	if len(tags) == 0 {
-		return i
+		return i, nil
 	}
 
-	tagSet := make(map[string]bool)
+	wanted := make(map[string]bool, len(tags))
 	for _, tag := range tags {
-		tagSet[strings.TrimSpace(tag)] = true
+		wanted[strings.TrimSpace(tag)] = false
 	}
 
-	filtered := &Inventory{
-		Devices: make([]device.DeviceConfig, 0),
-	}
-
+	filtered := &Inventory{Devices: make([]device.DeviceConfig, 0)}
 	for _, dev := range i.Devices {
+		appended := false
 		for _, devTag := range dev.Tags {
-			if tagSet[devTag] {
-				filtered.Devices = append(filtered.Devices, dev)
-				break
+			if _, ok := wanted[devTag]; ok {
+				wanted[devTag] = true
+				if !appended {
+					filtered.Devices = append(filtered.Devices, dev)
+					appended = true
+				}
 			}
 		}
 	}
-
-	return filtered
+	return filtered, missingFilterErr("tag(s)", wanted)
 }
 
-func (i *Inventory) FilterByNames(names []string) *Inventory {
+// FilterByNames keeps devices whose name is in `names`. The returned
+// error names any requested names with no matching device.
+func (i *Inventory) FilterByNames(names []string) (*Inventory, error) {
 	if len(names) == 0 {
-		return i
+		return i, nil
 	}
 
-	nameSet := make(map[string]bool)
+	wanted := make(map[string]bool, len(names))
 	for _, name := range names {
-		nameSet[strings.TrimSpace(name)] = true
+		wanted[strings.TrimSpace(name)] = false
 	}
 
-	filtered := &Inventory{
-		Devices: make([]device.DeviceConfig, 0),
-	}
-
+	filtered := &Inventory{Devices: make([]device.DeviceConfig, 0)}
 	for _, dev := range i.Devices {
-		if nameSet[dev.Name] {
+		if _, ok := wanted[dev.Name]; ok {
+			wanted[dev.Name] = true
 			filtered.Devices = append(filtered.Devices, dev)
 		}
 	}
-
-	return filtered
+	return filtered, missingFilterErr("device name(s)", wanted)
 }
 
-// FilterByLimit filters devices using various limit patterns
-func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
+// FilterByLimit filters devices using various limit patterns. The
+// returned error is non-nil when the pattern matched no devices —
+// typos like `--limit nosuchhost` no longer silently produce an empty
+// run that looks like success.
+func (i *Inventory) FilterByLimit(limitPattern string) (*Inventory, error) {
 	if limitPattern == "" {
-		return i
+		return i, nil
 	}
 
 	filtered := &Inventory{
@@ -284,7 +291,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 				filtered.Devices = append(filtered.Devices, dev)
 			}
 		}
-		return filtered
+		return filtered, limitMissErr(filtered, limitPattern)
 	}
 
 	// Parse different limit patterns
@@ -299,7 +306,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 				for idx := start; idx <= end; idx++ {
 					filtered.Devices = append(filtered.Devices, i.Devices[idx])
 				}
-				return filtered
+				return filtered, limitMissErr(filtered, limitPattern)
 			}
 		}
 		// If range parsing failed, treat as hostname
@@ -312,7 +319,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 				filtered.Devices = append(filtered.Devices, dev)
 			}
 		}
-		return filtered
+		return filtered, limitMissErr(filtered, limitPattern)
 
 	default:
 		// Check if it's a numeric index
@@ -320,7 +327,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 			if idx >= 0 && idx < len(i.Devices) {
 				filtered.Devices = append(filtered.Devices, i.Devices[idx])
 			}
-			return filtered
+			return filtered, limitMissErr(filtered, limitPattern)
 		}
 
 		// Treat as exact hostname match
@@ -330,8 +337,33 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 				break
 			}
 		}
-		return filtered
+		return filtered, limitMissErr(filtered, limitPattern)
 	}
+}
+
+// missingFilterErr / limitMissErr are local helpers — sibling to the
+// catalog package's `missingErr` but kept here to avoid an awkward
+// pkg/test ↔ pkg/inventory dependency. Both return nil on a non-empty
+// result and a descriptive error otherwise.
+func missingFilterErr(label string, seen map[string]bool) error {
+	var missing []string
+	for k, found := range seen {
+		if !found {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return fmt.Errorf("no matches for %s: %v", label, missing)
+}
+
+func limitMissErr(filtered *Inventory, pattern string) error {
+	if len(filtered.Devices) > 0 {
+		return nil
+	}
+	return fmt.Errorf("--limit %q matched no devices", pattern)
 }
 
 func inc(ip net.IP) {

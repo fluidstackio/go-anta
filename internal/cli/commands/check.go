@@ -90,17 +90,31 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	if checkTags != "" {
-		tagList := strings.Split(checkTags, ",")
-		inv = inv.FilterByTags(tagList)
+		var fErr error
+		inv, fErr = inv.FilterByTags(strings.Split(checkTags, ","))
+		if fErr != nil {
+			return fmt.Errorf("--tags filter: %w", fErr)
+		}
 	}
 
 	if checkDevices != "" {
-		deviceList := strings.Split(checkDevices, ",")
-		inv = inv.FilterByNames(deviceList)
+		var fErr error
+		inv, fErr = inv.FilterByNames(strings.Split(checkDevices, ","))
+		if fErr != nil {
+			return fmt.Errorf("--devices filter: %w", fErr)
+		}
 	}
 
 	if checkLimit != "" {
-		inv = inv.FilterByLimit(checkLimit)
+		var fErr error
+		inv, fErr = inv.FilterByLimit(checkLimit)
+		if fErr != nil {
+			return fmt.Errorf("--limit filter: %w", fErr)
+		}
+	}
+
+	if len(inv.Devices) == 0 {
+		return fmt.Errorf("no devices to check (check your inventory / filters)")
 	}
 
 	fmt.Printf("Checking %d devices...\n\n", len(inv.Devices))
