@@ -264,6 +264,98 @@
     max-height: 480px;
     overflow-y: auto;
   }
+  table.detail {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  table.detail th, table.detail td {
+    padding: 6px 10px;
+    text-align: left;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.detail th {
+    background: var(--panel);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+  table.detail tr:last-child td { border-bottom: 0; }
+  table.detail td.mono { font-family: var(--mono); }
+  table.detail td.num  { font-family: var(--mono); text-align: right; }
+  .icon {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    margin-right: 6px;
+    vertical-align: middle;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .icon svg { width: 16px; height: 16px; }
+  .icon.fan        { color: #66a3ff; }
+  .icon.psu        { color: #f0b352; }
+  .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .pill.success { background: rgba(63,185,80,.18);  color: var(--success); border-color: rgba(63,185,80,.4); }
+  .pill.failure { background: rgba(248,81,73,.18);  color: var(--failure); border-color: rgba(248,81,73,.4); }
+  .pill.error   { background: rgba(210,153,34,.20); color: var(--error);   border-color: rgba(210,153,34,.4); }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 4px 24px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .summary-grid .kv {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 0;
+  }
+  .summary-grid .kv dt {
+    margin: 0;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .summary-grid .kv dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+  }
+  ul.issues {
+    margin: 0;
+    padding: 8px 12px 8px 28px;
+    background: rgba(248,81,73,.10);
+    border: 1px solid rgba(248,81,73,.4);
+    border-radius: 6px;
+  }
+  ul.issues li { font-family: var(--mono); font-size: 12px; }
   .categories { display: flex; flex-wrap: wrap; gap: 4px; }
   .category {
     padding: 2px 8px;
@@ -348,6 +440,20 @@
               <h4>Message</h4>
               <div class="message">{{.Message}}</div>
               {{- end }}
+              {{- range .Blocks }}
+              <h4>{{.Title}}</h4>
+              {{- if eq .Kind "fans" }}
+                {{- template "fansTable" . }}
+              {{- else if eq .Kind "psus" }}
+                {{- template "psusTable" . }}
+              {{- else if eq .Kind "summary" }}
+                {{- template "summaryGrid" . }}
+              {{- else if eq .Kind "issues" }}
+                {{- template "issuesList" . }}
+              {{- else if eq .Kind "json" }}
+                <pre>{{.JSON}}</pre>
+              {{- end }}
+              {{- end }}
               {{- if .Details }}
               <h4>Details</h4>
               <pre>{{.Details}}</pre>
@@ -367,5 +473,63 @@
   </details>
   {{ end }}
 </main>
+
+{{/* ------------------------------------------------------------------- */}}
+{{/* Sub-templates for structured Details blocks.                         */}}
+{{/* ------------------------------------------------------------------- */}}
+
+{{ define "fanIcon" }}<span class="icon fan" aria-label="fan"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a2 2 0 0 1 2 2c0 1.86-1.4 3.39-3.2 3.86C9.18 7.07 10.74 4 12 4zm6 6a2 2 0 0 1 2 2c0 1.26-3.07 2.82-5.86 1.2C14.61 11.4 16.14 10 18 10zM4 14a2 2 0 0 1-2-2c0-1.26 3.07-2.82 5.86-1.2C7.39 12.6 5.86 14 4 14zm8 6a2 2 0 0 1-2-2c0-1.86 1.4-3.39 3.2-3.86C14.82 16.93 13.26 20 12 20zm0-8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg></span>{{ end }}
+
+{{ define "psuIcon" }}<span class="icon psu" aria-label="power supply"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z"/></svg></span>{{ end }}
+
+{{ define "fansTable" }}
+<table class="detail">
+  <thead><tr><th></th><th>Tray / PSU</th><th>Fan</th><th>Status</th><th>Speed</th></tr></thead>
+  <tbody>
+    {{- range .Fans }}
+    <tr>
+      <td>{{ template "fanIcon" }}</td>
+      <td class="mono">{{ if .Container }}{{ .Container }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .Label }}{{ .Label }}{{ else }}{{ .Name }}{{ end }}</td>
+      <td><span class="pill {{ .StatusClass }}">{{ if .Status }}{{ .Status }}{{ else }}—{{ end }}</span></td>
+      <td class="num">{{- if .ActualSpeedPct }}{{ .ActualSpeedPct }}%{{ if .ConfiguredPct }} <span style="color:var(--muted)">/ {{ .ConfiguredPct }}%</span>{{ end }}{{ else }}—{{ end }}</td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "psusTable" }}
+<table class="detail">
+  <thead><tr><th></th><th>Slot</th><th>Model</th><th>State</th><th>Output</th><th>Input V</th></tr></thead>
+  <tbody>
+    {{- range .PSUs }}
+    <tr>
+      <td>{{ template "psuIcon" }}</td>
+      <td class="mono">{{ if .Slot }}{{ .Slot }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .Model }}{{ .Model }}{{ else }}—{{ end }}</td>
+      <td><span class="pill {{ .StatusClass }}">{{ if .State }}{{ .State }}{{ else }}—{{ end }}</span></td>
+      <td class="mono">{{ if .OutputState }}{{ .OutputState }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .InputV }}{{ .InputV }}{{ else }}—{{ end }}</td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "summaryGrid" }}
+<div class="summary-grid">
+  {{- range .KV }}
+  <dl class="kv"><dt>{{ .Label }}</dt><dd>{{ .Value }}</dd></dl>
+  {{- end }}
+</div>
+{{ end }}
+
+{{ define "issuesList" }}
+<ul class="issues">
+  {{- range .Items }}<li>{{ . }}</li>{{ end }}
+</ul>
+{{ end }}
+
 </body>
 </html>

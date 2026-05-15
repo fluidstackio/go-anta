@@ -84,7 +84,44 @@ type testView struct {
 	Message    string
 	Categories []string
 	Duration   string
-	Details    string // pre-formatted JSON, "" if no Details
+	Blocks     []detailBlock // structured detail sections; rendered as tables/dls
+	Details    string        // JSON fallback when Details isn't a recognised shape
+}
+
+// detailBlock is one rendered section under a test's Details. Kind
+// selects the template path; only the matching fields are populated.
+type detailBlock struct {
+	Kind  string // "fans" | "psus" | "summary" | "issues" | "json"
+	Title string
+	Fans  []fanRow
+	PSUs  []psuRow
+	KV    []kvRow
+	Items []string // for "issues"
+	JSON  string   // for "json"
+}
+
+type fanRow struct {
+	Container      string
+	Name           string
+	Label          string
+	Status         string
+	StatusClass    string
+	ActualSpeedPct int
+	ConfiguredPct  int
+}
+
+type psuRow struct {
+	Slot        string
+	Model       string
+	State       string
+	StatusClass string
+	InputV      string
+	OutputState string
+}
+
+type kvRow struct {
+	Label string
+	Value string
 }
 
 type statsView struct {
@@ -195,14 +232,183 @@ func buildTestView(res test.TestResult) testView {
 		Categories: res.Categories,
 		Duration:   res.Duration.Truncate(time.Millisecond).String(),
 	}
-	if res.Details != nil {
-		if b, err := json.MarshalIndent(res.Details, "", "  "); err == nil {
-			tv.Details = string(b)
-		} else {
-			tv.Details = fmt.Sprintf("%+v", res.Details)
+	tv.Blocks, tv.Details = renderDetails(res.Details)
+	return tv
+}
+
+// renderDetails inspects a TestResult.Details payload and extracts
+// any recognised shapes (fans, power supplies, key-value summaries,
+// issue lists) into structured blocks. Unknown content falls through
+// to a pretty-printed JSON block so nothing is hidden.
+//
+// Recognised top-level keys when Details is a map:
+//
+//	fans            → []fanRow  → "fans" block, rendered as a table
+//	power_supplies  → []psuRow  → "psus" block, rendered as a table
+//	issues          → []string  → "issues" block, rendered as a list
+//	any other scalar → kv pair → "summary" block, rendered as a dl
+//
+// Anything we can't make sense of (Details isn't a map, or contains
+// nested structures we don't know) becomes a JSON block at the end.
+func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
+	if d == nil {
+		return nil, ""
+	}
+
+	// Normalise via a JSON round-trip so we get map[string]any /
+	// []any regardless of whether the test populated Details with a
+	// typed struct or an ad-hoc map.
+	raw, err := json.Marshal(d)
+	if err != nil {
+		return nil, fmt.Sprintf("%+v", d)
+	}
+	var top any
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil, string(raw)
+	}
+	m, ok := top.(map[string]any)
+	if !ok {
+		// Non-object Details (a bare list or scalar) — JSON-dump it.
+		b, _ := json.MarshalIndent(d, "", "  ")
+		return nil, string(b)
+	}
+
+	consumed := map[string]bool{}
+
+	if fans, ok := m["fans"].([]any); ok {
+		blocks = append(blocks, fansBlock(fans))
+		consumed["fans"] = true
+	}
+	if psus, ok := m["power_supplies"].([]any); ok {
+		blocks = append(blocks, psusBlock(psus))
+		consumed["power_supplies"] = true
+	}
+	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
+		var list []string
+		for _, item := range issues {
+			if s, ok := item.(string); ok {
+				list = append(list, s)
+			}
+		}
+		if len(list) > 0 {
+			blocks = append(blocks, detailBlock{Kind: "issues", Title: "Issues", Items: list})
+			consumed["issues"] = true
 		}
 	}
-	return tv
+
+	// Everything else that's scalar becomes a summary key-value row.
+	var kvs []kvRow
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		if !consumed[k] {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	var leftovers map[string]any
+	for _, k := range keys {
+		v := m[k]
+		switch v.(type) {
+		case string, float64, bool, int, int64, nil:
+			kvs = append(kvs, kvRow{Label: humanize(k), Value: fmt.Sprintf("%v", v)})
+		default:
+			if leftovers == nil {
+				leftovers = map[string]any{}
+			}
+			leftovers[k] = v
+		}
+	}
+	if len(kvs) > 0 {
+		blocks = append([]detailBlock{{Kind: "summary", Title: "Summary", KV: kvs}}, blocks...)
+	}
+	if len(leftovers) > 0 {
+		b, _ := json.MarshalIndent(leftovers, "", "  ")
+		blocks = append(blocks, detailBlock{Kind: "json", Title: "Other", JSON: string(b)})
+	}
+	return blocks, ""
+}
+
+func fansBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "fans", Title: "Fans"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := fanRow{
+			Container: strVal(m, "container"),
+			Name:      strVal(m, "name"),
+			Label:     strVal(m, "label"),
+			Status:    strVal(m, "status"),
+		}
+		row.StatusClass = statusClassFor(row.Status)
+		if v, ok := m["actual_speed_pct"].(float64); ok {
+			row.ActualSpeedPct = int(v)
+		}
+		if v, ok := m["configured_pct"].(float64); ok {
+			row.ConfiguredPct = int(v)
+		}
+		out.Fans = append(out.Fans, row)
+	}
+	return out
+}
+
+func psusBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "psus", Title: "Power supplies"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := psuRow{
+			Slot:        strVal(m, "slot"),
+			Model:       strVal(m, "model"),
+			State:       strVal(m, "state"),
+			OutputState: strVal(m, "output_state"),
+		}
+		row.StatusClass = statusClassFor(row.State)
+		if v, ok := m["input_voltage"].(float64); ok {
+			row.InputV = fmt.Sprintf("%.1f V", v)
+		}
+		out.PSUs = append(out.PSUs, row)
+	}
+	return out
+}
+
+func strVal(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// statusClassFor maps EOS-flavoured status strings to a CSS class so
+// row pills render in the right colour. Anything we don't recognise
+// is treated as neutral (no class).
+func statusClassFor(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "ok", "running", "powerlossok", "powerlostok", "good":
+		return "success"
+	case "failed", "fail", "error":
+		return "failure"
+	case "":
+		return ""
+	default:
+		// Anything that isn't an obvious ok/fail (e.g. "uninitialized")
+		// is shown in the warning tier.
+		return "error"
+	}
+}
+
+// humanize turns snake_case keys into Title Case labels for the
+// summary table. "ambient_temperature_c" → "Ambient temperature c".
+func humanize(s string) string {
+	parts := strings.Split(s, "_")
+	if len(parts) == 0 {
+		return s
+	}
+	parts[0] = strings.ToUpper(parts[0][:1]) + parts[0][1:]
+	return strings.Join(parts, " ")
 }
 
 func statusSlug(s test.TestStatus) string {

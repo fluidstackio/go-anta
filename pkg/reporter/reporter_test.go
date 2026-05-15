@@ -58,8 +58,9 @@ func TestRender_ContainsDeviceAndStatus(t *testing.T) {
 		"connection refused",
 		"VerifyEOSVersion",
 		"VerifyHostname",
-		"Hostname is &#39;leaf1-old&#39;",       // HTML-escaped
-		`&#34;actual&#34;: &#34;leaf1-old&#34;`, // Details pretty-printed (HTML-escaped quotes)
+		"Hostname is &#39;leaf1-old&#39;", // HTML-escaped
+		"<dt>Actual</dt>",                 // Details rendered as summary kv
+		"<dd>leaf1-old</dd>",
 		"smoke",                                 // title
 		"3s",                                    // duration
 	} {
@@ -110,6 +111,136 @@ func TestRender_OrphanResultStillRenders(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "ghost") {
 		t.Error("orphan device should still appear")
+	}
+}
+
+func TestRender_FansTable(t *testing.T) {
+	// A test result with the same shape VerifyEnvironmentCooling now
+	// produces should render as a real table with the fan icon, a
+	// status pill, and speed columns — not as raw JSON.
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyEnvironmentCooling",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"fan_count":         3,
+					"cooling_mode":      "automatic",
+					"airflow_direction": "frontToBackAirflow",
+					"fans": []any{
+						map[string]any{
+							"name":             "1",
+							"container":        "FanTraySlot/1",
+							"label":            "1/1",
+							"status":           "ok",
+							"actual_speed_pct": float64(29),
+							"configured_pct":   float64(30),
+						},
+						map[string]any{
+							"name":             "2",
+							"container":        "FanTraySlot/2",
+							"label":            "2/1",
+							"status":           "failed",
+							"actual_speed_pct": float64(0),
+							"configured_pct":   float64(30),
+						},
+					},
+				},
+			},
+		},
+	}
+	body, err := RenderToBytes(r)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	s := string(body)
+	for _, want := range []string{
+		`class="detail"`,                // table renders
+		`class="icon fan"`,              // icon appears
+		`class="pill success"`,          // ok status colored
+		`class="pill failure"`,          // failed status colored
+		"FanTraySlot/1",                 // container shown
+		"1/1",                           // label shown
+		"29%",                           // speed shown
+		`<dt>Cooling mode</dt>`,         // summary key-value
+		`<dd>automatic</dd>`,            // summary value
+		`<dt>Airflow direction</dt>`,    // humanized snake_case key
+		`<dd>frontToBackAirflow</dd>`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+	// Make sure the raw JSON `{"fans": ...}` blob is NOT in the output
+	// — that would mean the table fell through to JSON-fallback.
+	if strings.Contains(s, `"fan_count": 3`) {
+		t.Errorf("fans should render as table, not as raw JSON")
+	}
+}
+
+func TestRender_PSUsTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyEnvironmentPower",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"power_supplies": []any{
+						map[string]any{
+							"slot":          "PSU1",
+							"model":         "PWR-500AC-F",
+							"state":         "ok",
+							"output_state":  "powered",
+							"input_voltage": float64(228.5),
+						},
+					},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	for _, want := range []string{
+		`class="icon psu"`,
+		"PSU1",
+		"PWR-500AC-F",
+		"228.5 V",
+		`class="pill success"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+}
+
+func TestRender_IssuesList(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyEnvironmentCooling",
+				DeviceName: "tor1",
+				Status:     test.TestFailure,
+				Details: map[string]any{
+					"issues": []any{"FanTraySlot/2/2/1: status failed"},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	if !strings.Contains(s, `<ul class="issues">`) {
+		t.Error("issues list should render with .issues class")
+	}
+	if !strings.Contains(s, "FanTraySlot/2/2/1: status failed") {
+		t.Error("issue text should appear")
 	}
 }
 
