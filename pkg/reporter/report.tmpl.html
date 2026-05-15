@@ -306,6 +306,7 @@
   .icon.temp       { color: #e07b7b; }
   .icon.optic      { color: #a3e635; }
   .icon.port       { color: #c084fc; }
+  .icon.module     { color: #5eead4; }
   table.detail td.num.hot { color: var(--failure); font-weight: 600; }
   .bar {
     display: inline-block;
@@ -474,6 +475,8 @@
                 {{- template "opticsTable" . }}
               {{- else if eq .Kind "ifaceErrors" }}
                 {{- template "ifaceErrorsTable" . }}
+              {{- else if eq .Kind "modules" }}
+                {{- template "modulesTable" . }}
               {{- else if eq .Kind "summary" }}
                 {{- template "summaryGrid" . }}
               {{- else if eq .Kind "issues" }}
@@ -515,6 +518,8 @@
 {{ define "opticIcon" }}<span class="icon optic" aria-label="transceiver"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="7" width="20" height="10" rx="2"/><circle cx="7" cy="12" r="1.8" fill="var(--panel-2)"/><circle cx="13" cy="12" r="1.8" fill="var(--panel-2)"/></svg></span>{{ end }}
 
 {{ define "portIcon" }}<span class="icon port" aria-label="interface"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v12H3V6zm2 2v2h4V8H5zm6 0v2h2V8h-2zm4 0v2h4V8h-4zM5 12v2h4v-2H5zm6 0v2h2v-2h-2zm4 0v2h4v-2h-4z"/></svg></span>{{ end }}
+
+{{ define "moduleIcon" }}<span class="icon module" aria-label="module"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/><path d="M3 9h2v6H3zm0-3h2v1H3zm0 11h2v1H3zm16-8h2v6h-2zm0-3h2v1h-2zm0 11h2v1h-2zM9 3v2h1V3zm5 0v2h1V3zM9 19v2h1v-2zm5 0v2h1v-2z"/></svg></span>{{ end }}
 
 {{ define "fansTable" }}
 <table class="detail">
@@ -666,6 +671,33 @@
       <td class="num {{ if .FrameTooShorts }}hot{{ end }}">{{ if .FrameTooShorts }}{{ .FrameTooShorts }}{{ else }}—{{ end }}</td>
       <td class="num {{ if .FrameTooLongs }}hot{{ end }}">{{ if .FrameTooLongs }}{{ .FrameTooLongs }}{{ else }}—{{ end }}</td>
       <td class="num hot">{{ .Total }}</td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "modulesTable" }}
+<table class="detail">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Name</th>
+      <th>Model</th>
+      <th>Serial</th>
+      <th>HW rev</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{- range .Modules }}
+    <tr>
+      <td>{{ template "moduleIcon" }}</td>
+      <td class="mono">{{ if .Name }}{{ .Name }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .Model }}{{ .Model }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .Serial }}{{ .Serial }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .HwRevision }}{{ .HwRevision }}{{ else }}—{{ end }}</td>
+      <td>{{ if .Description }}{{ .Description }}{{ else }}—{{ end }}</td>
     </tr>
     {{- end }}
   </tbody>

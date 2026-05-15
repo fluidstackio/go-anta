@@ -3,6 +3,7 @@ package hardware
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"github.com/fluidstackio/go-anta/pkg/platform"
@@ -78,6 +79,17 @@ func NewVerifyInventory(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// InventoryModule is one row from `show inventory`'s
+// systemInformation list — chassis, supervisors, line cards,
+// power supplies, fan trays.
+type InventoryModule struct {
+	Name        string `json:"name"`
+	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	HwRevision  string `json:"hw_revision,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -112,114 +124,141 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 	}
 
 	issues := []string{}
+	details := map[string]any{}
 
-	if t.MinimumMemory > 0 {
-		if memTotal, ok := versionData["memTotal"].(float64); ok {
-			// EOS reports memTotal in kilobytes (`/proc/meminfo` convention),
-			// not bytes. Dividing by 1024 twice (the previous behaviour)
-			// reported memory ~1024× smaller than reality — a 64 GB switch
-			// looked like a 62 MB switch and any reasonable MinimumMemory
-			// threshold failed.
-			memTotalMB := int64(memTotal / 1024)
-			if memTotalMB < t.MinimumMemory {
-				issues = append(issues, fmt.Sprintf("Insufficient memory: %d MB < %d MB required",
-					memTotalMB, t.MinimumMemory))
+	if model, ok := versionData["modelName"].(string); ok {
+		details["model"] = model
+	}
+	if v, ok := versionData["version"].(string); ok {
+		details["eos_version"] = v
+	}
+	if v, ok := versionData["serialNumber"].(string); ok {
+		details["serial_number"] = v
+	}
+	if v, ok := versionData["systemMacAddress"].(string); ok {
+		details["system_mac"] = v
+	}
+
+	var memTotalMB int64
+	if memTotal, ok := versionData["memTotal"].(float64); ok {
+		// EOS reports memTotal in kilobytes (`/proc/meminfo` convention),
+		// not bytes.
+		memTotalMB = int64(memTotal / 1024)
+		details["memory_mb"] = memTotalMB
+	}
+	if t.MinimumMemory > 0 && memTotalMB > 0 && memTotalMB < t.MinimumMemory {
+		issues = append(issues, fmt.Sprintf("Insufficient memory: %d MB < %d MB required",
+			memTotalMB, t.MinimumMemory))
+	}
+
+	// Always read flash size (not just when MinimumFlash is configured) —
+	// it's useful information for the report even without a threshold.
+	fsCmd := device.Command{
+		Template: "show file systems",
+		Format:   "json",
+		UseCache: true,
+	}
+	if fsResult, err := dev.Execute(ctx, fsCmd); err == nil {
+		if fsData, err := test.AsMap(fsResult.Output); err == nil {
+			var flashSizeMB int64 = -1
+			if entries, ok := fsData["fileSystems"].([]any); ok {
+				for _, e := range entries {
+					entry, ok := e.(map[string]any)
+					if !ok {
+						continue
+					}
+					if prefix, _ := entry["prefix"].(string); prefix == "flash:" {
+						if size, ok := entry["size"].(float64); ok {
+							flashSizeMB = int64(size / 1024)
+						}
+						break
+					}
+				}
+			}
+			if flashSizeMB >= 0 {
+				details["flash_mb"] = flashSizeMB
+			}
+			if t.MinimumFlash > 0 {
+				switch {
+				case flashSizeMB < 0:
+					issues = append(issues, "flash: filesystem not found in `show file systems`")
+				case flashSizeMB < t.MinimumFlash:
+					issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
+						flashSizeMB, t.MinimumFlash))
+				}
 			}
 		}
 	}
 
-	if t.MinimumFlash > 0 {
-		// `show version` does not expose flashSize on most modern EOS
-		// platforms. Read it from `show file systems` and find the
-		// `flash:` filesystem. Sizes there are reported in 1K blocks.
-		fsCmd := device.Command{
-			Template: "show file systems",
-			Format:   "json",
-			UseCache: true,
-		}
-		fsResult, err := dev.Execute(ctx, fsCmd)
-		if err != nil {
-			result.Status = test.TestError
-			result.Message = fmt.Sprintf("Failed to get file system info: %v", err)
-			return result, nil
-		}
-		fsData, err := test.AsMap(fsResult.Output)
-		if err != nil {
-			result.Status = test.TestError
-			result.Message = fmt.Sprintf("Unexpected file systems output: %v", err)
-			return result, nil
-		}
-		var flashSizeMB int64 = -1
-		if entries, ok := fsData["fileSystems"].([]any); ok {
-			for _, e := range entries {
-				entry, ok := e.(map[string]any)
-				if !ok {
-					continue
-				}
-				if prefix, _ := entry["prefix"].(string); prefix == "flash:" {
-					if size, ok := entry["size"].(float64); ok {
-						flashSizeMB = int64(size / 1024)
+	// Always read the inventory list so the report can render the modules
+	// table; used to be gated on RequiredModules/MinimumSupplies being set.
+	var modulesList []InventoryModule
+	moduleNames := map[string]bool{}
+	powerSupplyCount := 0
+	invCmd := device.Command{
+		Template: "show inventory",
+		Format:   "json",
+		UseCache: true,
+	}
+	if invResult, err := dev.Execute(ctx, invCmd); err == nil {
+		if invData, ok := invResult.Output.(map[string]any); ok {
+			if systemInfo, ok := invData["systemInformation"].([]any); ok {
+				for _, item := range systemInfo {
+					m, ok := item.(map[string]any)
+					if !ok {
+						continue
 					}
-					break
+					row := InventoryModule{}
+					if v, ok := m["name"].(string); ok {
+						row.Name = v
+						moduleNames[v] = true
+						if strings.HasPrefix(v, "PowerSupply") {
+							powerSupplyCount++
+						}
+					}
+					if v, ok := m["modelName"].(string); ok {
+						row.Model = v
+						moduleNames[v] = true
+					}
+					if v, ok := m["serialNumber"].(string); ok {
+						row.Serial = v
+					}
+					if v, ok := m["hardwareRevision"].(string); ok {
+						row.HwRevision = v
+					}
+					if v, ok := m["description"].(string); ok {
+						row.Description = v
+					}
+					modulesList = append(modulesList, row)
 				}
 			}
-		}
-		if flashSizeMB < 0 {
-			issues = append(issues, "flash: filesystem not found in `show file systems`")
-		} else if flashSizeMB < t.MinimumFlash {
-			issues = append(issues, fmt.Sprintf("Insufficient flash: %d MB < %d MB required",
-				flashSizeMB, t.MinimumFlash))
 		}
 	}
+	if len(modulesList) > 0 {
+		details["modules"] = modulesList
+		details["module_count"] = len(modulesList)
+		details["power_supply_count"] = powerSupplyCount
+	}
 
-	if len(t.RequiredModules) > 0 || t.MinimumSupplies > 0 {
-		invCmd := device.Command{
-			Template: "show inventory",
-			Format:   "json",
-			UseCache: true,
-		}
-
-		invResult, err := dev.Execute(ctx, invCmd)
-		if err == nil {
-			if invData, ok := invResult.Output.(map[string]any); ok {
-				if systemInfo, ok := invData["systemInformation"].([]any); ok {
-					modules := make(map[string]bool)
-					powerSupplyCount := 0
-
-					for _, item := range systemInfo {
-						if itemData, ok := item.(map[string]any); ok {
-							if name, ok := itemData["name"].(string); ok {
-								modules[name] = true
-								// Count power supplies
-								if len(name) >= 11 && name[:11] == "PowerSupply" {
-									powerSupplyCount++
-								}
-							}
-							if model, ok := itemData["modelName"].(string); ok {
-								modules[model] = true
-							}
-						}
-					}
-
-					if t.MinimumSupplies > 0 && powerSupplyCount < t.MinimumSupplies {
-						issues = append(issues, fmt.Sprintf("Insufficient power supplies: %d < %d required",
-							powerSupplyCount, t.MinimumSupplies))
-					}
-
-					for _, required := range t.RequiredModules {
-						if !modules[required] {
-							issues = append(issues, fmt.Sprintf("Required module not found: %s", required))
-						}
-					}
-				}
-			}
+	if t.MinimumSupplies > 0 && powerSupplyCount < t.MinimumSupplies {
+		issues = append(issues, fmt.Sprintf("Insufficient power supplies: %d < %d required",
+			powerSupplyCount, t.MinimumSupplies))
+	}
+	for _, required := range t.RequiredModules {
+		if !moduleNames[required] {
+			issues = append(issues, fmt.Sprintf("Required module not found: %s", required))
 		}
 	}
 
 	if len(issues) > 0 {
+		details["issues"] = issues
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Inventory issues: %v", issues)
+	} else {
+		result.Message = fmt.Sprintf("%s · EOS %s · %d modules, %d PSUs",
+			details["model"], details["eos_version"], len(modulesList), powerSupplyCount)
 	}
+	result.Details = details
 
 	return result, nil
 }

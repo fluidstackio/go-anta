@@ -91,13 +91,14 @@ type testView struct {
 // detailBlock is one rendered section under a test's Details. Kind
 // selects the template path; only the matching fields are populated.
 type detailBlock struct {
-	Kind        string // "fans" | "psus" | "temps" | "optics" | "ifaceErrors" | "summary" | "issues" | "json"
+	Kind        string // "fans" | "psus" | "temps" | "optics" | "ifaceErrors" | "modules" | "summary" | "issues" | "json"
 	Title       string
 	Fans        []fanRow
 	PSUs        []psuRow
 	Temps       []tempRow
 	Optics      []opticRow
 	IfaceErrors []ifaceErrorRow
+	Modules     []moduleRow
 	KV          []kvRow
 	Items       []string // for "issues"
 	JSON        string   // for "json"
@@ -151,6 +152,14 @@ type opticRow struct {
 	TxBias      string
 	Status      string
 	StatusClass string
+}
+
+type moduleRow struct {
+	Name        string
+	Model       string
+	Serial      string
+	HwRevision  string
+	Description string
 }
 
 type ifaceErrorRow struct {
@@ -341,6 +350,10 @@ func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
 		blocks = append(blocks, ifaceErrorsBlock(errs))
 		consumed["interface_errors"] = true
 	}
+	if mods, ok := m["modules"].([]any); ok {
+		blocks = append(blocks, modulesBlock(mods))
+		consumed["modules"] = true
+	}
 	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
 		var list []string
 		for _, item := range issues {
@@ -501,6 +514,24 @@ func tempsBlock(items []any) detailBlock {
 			}
 		}
 		out.Temps = append(out.Temps, row)
+	}
+	return out
+}
+
+func modulesBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "modules", Title: "Modules"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		out.Modules = append(out.Modules, moduleRow{
+			Name:        strVal(m, "name"),
+			Model:       strVal(m, "model"),
+			Serial:      strVal(m, "serial"),
+			HwRevision:  strVal(m, "hw_revision"),
+			Description: strVal(m, "description"),
+		})
 	}
 	return out
 }

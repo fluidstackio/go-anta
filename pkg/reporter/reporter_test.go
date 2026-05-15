@@ -389,6 +389,60 @@ func TestRender_IfaceErrorsTable(t *testing.T) {
 	}
 }
 
+func TestRender_ModulesTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyInventory",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"model":              "DCS-7060DX4-32-F",
+					"eos_version":        "4.34.4M",
+					"serial_number":      "ABC123",
+					"memory_mb":          int64(7863),
+					"flash_mb":           int64(114720),
+					"module_count":       3,
+					"power_supply_count": 2,
+					"modules": []any{
+						map[string]any{
+							"name":        "PowerSupply1",
+							"model":       "PWR-3001-AC-RED",
+							"serial":      "PS1",
+							"hw_revision": "01",
+							"description": "Power Supply",
+						},
+						map[string]any{
+							"name":  "FanTray1",
+							"model": "FAN-9001",
+						},
+					},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	for _, want := range []string{
+		`class="icon module"`,
+		"PowerSupply1",
+		"PWR-3001-AC-RED",
+		"FanTray1",
+		"<dt>Model</dt>",
+		"<dd>DCS-7060DX4-32-F</dd>",
+		"<dt>Eos version</dt>",
+		"<dd>4.34.4M</dd>",
+		"<dt>Memory mb</dt>",
+		"<dd>7863</dd>",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+}
+
 func TestRender_IssuesList(t *testing.T) {
 	r := &Report{
 		Started: time.Now(),
