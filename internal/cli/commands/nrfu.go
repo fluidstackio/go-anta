@@ -130,22 +130,49 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	}
 
 	if tags != "" {
-		tagList := strings.Split(tags, ",")
-		inv = inv.FilterByTags(tagList)
+		var fErr error
+		inv, fErr = inv.FilterByTags(strings.Split(tags, ","))
+		if fErr != nil {
+			return fmt.Errorf("--tags filter: %w", fErr)
+		}
 	}
 
 	if devices != "" {
-		deviceList := strings.Split(devices, ",")
-		inv = inv.FilterByNames(deviceList)
+		var fErr error
+		inv, fErr = inv.FilterByNames(strings.Split(devices, ","))
+		if fErr != nil {
+			return fmt.Errorf("--devices filter: %w", fErr)
+		}
 	}
 
 	if limit != "" {
-		inv = inv.FilterByLimit(limit)
+		var fErr error
+		inv, fErr = inv.FilterByLimit(limit)
+		if fErr != nil {
+			return fmt.Errorf("--limit filter: %w", fErr)
+		}
 	}
 
 	if tests != "" {
-		testList := strings.Split(tests, ",")
-		catalog = catalog.FilterByName(testList)
+		var fErr error
+		catalog, fErr = catalog.FilterByName(strings.Split(tests, ","))
+		if fErr != nil {
+			return fmt.Errorf("--tests filter: %w", fErr)
+		}
+	}
+
+	// R7: catch typos in catalog (Module, Name) tuples upfront. Without
+	// this, an unknown test surfaces as a per-device "Test not found"
+	// — N devices × M unknown tests duplicate errors instead of one.
+	if err := catalog.ValidateAgainst(test.GetRegistry()); err != nil {
+		return fmt.Errorf("catalog: %w", err)
+	}
+
+	if len(inv.Devices) == 0 {
+		return fmt.Errorf("no devices to run against (check your inventory / filters)")
+	}
+	if len(catalog.Tests) == 0 {
+		return fmt.Errorf("no tests to run (check your catalog / filters)")
 	}
 
 	if dryRun {

@@ -86,19 +86,32 @@ func runInventory(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load inventory: %w", err)
 	}
 
-	// Apply filters
+	// Apply filters. The `inventory` command is exploratory by design,
+	// so a filter that matches nothing is a soft warning here rather
+	// than a hard error like in `nrfu` / `check` — the user might be
+	// probing what tags exist.
 	if invTags != "" {
-		tagList := strings.Split(invTags, ",")
-		inv = inv.FilterByTags(tagList)
+		var fErr error
+		inv, fErr = inv.FilterByTags(strings.Split(invTags, ","))
+		if fErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", fErr)
+		}
 	}
 
 	if invDevices != "" {
-		deviceList := strings.Split(invDevices, ",")
-		inv = inv.FilterByNames(deviceList)
+		var fErr error
+		inv, fErr = inv.FilterByNames(strings.Split(invDevices, ","))
+		if fErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", fErr)
+		}
 	}
 
 	if invLimit != "" {
-		inv = inv.FilterByLimit(invLimit)
+		var fErr error
+		inv, fErr = inv.FilterByLimit(invLimit)
+		if fErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", fErr)
+		}
 	}
 
 	// Display inventory based on format
