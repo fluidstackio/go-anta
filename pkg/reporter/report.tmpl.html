@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — {{.Started}}</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1d222c;
+    --border: #2a303b;
+    --text: #e7eaf0;
+    --muted: #9aa3b2;
+    --accent: #66a3ff;
+    --success: #3fb950;
+    --failure: #f85149;
+    --error: #d29922;
+    --skipped: #8b949e;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --panel-2: #f0f2f5;
+      --border: #d7dbe2;
+      --text: #1b2030;
+      --muted: #5a6273;
+      --accent: #1f6feb;
+      --success: #1a7f37;
+      --failure: #cf222e;
+      --error: #9a6700;
+      --skipped: #6e7681;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header.run {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  header.run h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  header.run .meta {
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .totals {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .chip strong { color: var(--text); font-weight: 600; }
+  .chip.success strong { color: var(--success); }
+  .chip.failure strong { color: var(--failure); }
+  .chip.error strong   { color: var(--error); }
+  .chip.skipped strong { color: var(--skipped); }
+  main {
+    padding: 16px 24px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  details.device {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  details.device > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    user-select: none;
+  }
+  details.device > summary::-webkit-details-marker { display: none; }
+  details.device > summary::before {
+    content: "▸";
+    color: var(--muted);
+    width: 12px;
+    display: inline-block;
+    transition: transform 0.1s ease;
+  }
+  details.device[open] > summary::before { transform: rotate(90deg); }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.connected    { background: var(--success); box-shadow: 0 0 0 3px rgba(63,185,80,.18); }
+  .dot.disconnected { background: var(--failure); box-shadow: 0 0 0 3px rgba(248,81,73,.18); }
+  .device-name {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .device-host {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .device-counts {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  .count {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .count.success { color: var(--success); }
+  .count.failure { color: var(--failure); }
+  .count.error   { color: var(--error); }
+  .count.skipped { color: var(--skipped); }
+  .device-body {
+    border-top: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .device-meta {
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .device-meta div { display: flex; flex-direction: column; gap: 2px; }
+  .device-meta dt {
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 0;
+  }
+  .device-meta dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .device-meta dd.warn { color: var(--failure); }
+  .tests {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .tests li {
+    border-bottom: 1px solid var(--border);
+  }
+  .tests li:last-child { border-bottom: 0; }
+  .tests details > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 18px 10px 26px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+    position: relative;
+  }
+  .tests details > summary::-webkit-details-marker { display: none; }
+  .tests details > summary::before {
+    content: "▸";
+    color: var(--muted);
+    position: absolute;
+    left: 12px;
+    transition: transform 0.1s ease;
+  }
+  .tests details[open] > summary::before { transform: rotate(90deg); }
+  .test-name { flex: 1; font-weight: 500; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--mono);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .badge.success { background: rgba(63,185,80,.18);  color: var(--success); }
+  .badge.failure { background: rgba(248,81,73,.18);  color: var(--failure); }
+  .badge.error   { background: rgba(210,153,34,.20); color: var(--error);   }
+  .badge.skipped { background: rgba(139,148,158,.20); color: var(--skipped); }
+  .badge.unset   { background: var(--panel-2); color: var(--muted); }
+  .duration {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    min-width: 50px;
+    text-align: right;
+  }
+  .test-body {
+    padding: 8px 18px 18px 26px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+  .test-body h4 {
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 12px 0 4px;
+  }
+  .test-body h4:first-child { margin-top: 0; }
+  .test-body .message {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .test-body pre {
+    margin: 0;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  .categories { display: flex; flex-wrap: wrap; gap: 4px; }
+  .category {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .nodevices, .notests {
+    padding: 18px;
+    color: var(--muted);
+    text-align: center;
+    font-style: italic;
+  }
+  @media print {
+    details, details > summary { break-inside: avoid; }
+    details, details[open] > summary::before { content: ""; }
+    .totals .chip { border: 1px solid #ccc; background: white; color: black; }
+  }
+</style>
+</head>
+<body>
+<header class="run">
+  <div>
+    <h1>{{.Title}}</h1>
+    <div class="meta">started {{.Started}} · duration {{.Duration}}</div>
+  </div>
+  <div class="totals">
+    <span class="chip"><strong>{{.Totals.Total}}</strong> total</span>
+    <span class="chip success"><strong>{{.Totals.Success}}</strong> success</span>
+    <span class="chip failure"><strong>{{.Totals.Failure}}</strong> failure</span>
+    <span class="chip error"><strong>{{.Totals.Error}}</strong> error</span>
+    {{- if .Totals.Skipped }}<span class="chip skipped"><strong>{{.Totals.Skipped}}</strong> skipped</span>{{ end }}
+    <span class="chip"><strong>{{.Totals.SuccessPct}}</strong> pass rate</span>
+  </div>
+</header>
+
+<main>
+  {{ if not .Devices }}
+    <p class="nodevices">No devices ran.</p>
+  {{ end }}
+  {{ range .Devices }}
+  <details class="device" {{ if or .Stats.Failure .Stats.Error (not .Info.Connected) }}open{{ end }}>
+    <summary>
+      <span class="dot {{.Status}}" title="{{.Status}}"></span>
+      <span class="device-name">{{.Info.Name}}</span>
+      {{- if .HostPort }}<span class="device-host">{{.HostPort}}</span>{{ end }}
+      <span class="device-counts">
+        <span class="count success" title="success">{{.Stats.Success}}</span>
+        <span class="count failure" title="failure">{{.Stats.Failure}}</span>
+        <span class="count error" title="error">{{.Stats.Error}}</span>
+        {{- if .Stats.Skipped }}<span class="count skipped" title="skipped">{{.Stats.Skipped}}</span>{{ end }}
+      </span>
+    </summary>
+
+    <div class="device-body">
+      <dl class="device-meta">
+        <div><dt>Status</dt><dd class="{{ if not .Info.Connected }}warn{{ end }}">{{.Status}}{{ if .Info.ConnectError }} — {{.Info.ConnectError}}{{ end }}</dd></div>
+        {{- if .Info.Model }}<div><dt>Model</dt><dd>{{.Info.Model}}</dd></div>{{ end }}
+        {{- if .Info.EOSVersion }}<div><dt>EOS Version</dt><dd>{{.Info.EOSVersion}}</dd></div>{{ end }}
+        {{- if .Info.Transport }}<div><dt>Transport</dt><dd>{{.Info.Transport}}{{ if .Info.Port }}:{{.Info.Port}}{{ end }}</dd></div>{{ end }}
+        {{- if .Info.Tags }}<div><dt>Tags</dt><dd>{{ range $i, $t := .Info.Tags }}{{ if $i }}, {{ end }}{{ $t }}{{ end }}</dd></div>{{ end }}
+        <div><dt>Pass rate</dt><dd>{{.Stats.SuccessPct}} ({{.Stats.Success}}/{{.Stats.Total}})</dd></div>
+      </dl>
+
+      {{ if not .Tests }}
+        <p class="notests">No tests ran on this device.</p>
+      {{ end }}
+      <ul class="tests">
+        {{- range .Tests }}
+        <li>
+          <details {{ if or (eq .Status "failure") (eq .Status "error") }}open{{ end }}>
+            <summary>
+              <span class="badge {{.Status}}">{{.StatusText}}</span>
+              <span class="test-name">{{.Name}}</span>
+              <span class="duration">{{.Duration}}</span>
+            </summary>
+            <div class="test-body">
+              {{- if .Message }}
+              <h4>Message</h4>
+              <div class="message">{{.Message}}</div>
+              {{- end }}
+              {{- if .Details }}
+              <h4>Details</h4>
+              <pre>{{.Details}}</pre>
+              {{- end }}
+              {{- if .Categories }}
+              <h4>Categories</h4>
+              <div class="categories">
+                {{- range .Categories }}<span class="category">{{.}}</span>{{ end }}
+              </div>
+              {{- end }}
+            </div>
+          </details>
+        </li>
+        {{- end }}
+      </ul>
+    </div>
+  </details>
+  {{ end }}
+</main>
+</body>
+</html>
