@@ -385,8 +385,8 @@ results, err := runner.Run(ctx, catalog.Tests, devices)
 |-----------|-------------|------------|
 | `VerifyTemperature` | Check device temperature sensors | `check_temp_sensors`, `failure_margin` |
 | `VerifyTransceivers` | Validate optical transceivers | `check_manufacturer`, `manufacturers` |
-| `VerifyPowerSupplies` | Check power supply status | `minimum_supplies` |
-| `VerifyInventory` | Verify hardware inventory | `check_psus`, `check_fans` |
+| `VerifyEnvironmentPower` | Check every power supply is in Ok state, optionally with voltage range | `check_voltage`, `min_input_voltage`, `max_input_voltage` |
+| `VerifyInventory` | Verify hardware inventory, including PSU count | `minimum_memory`, `minimum_flash`, `minimum_supplies`, `required_modules` |
 
 #### Routing Tests
 

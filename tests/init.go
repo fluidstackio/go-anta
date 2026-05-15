@@ -37,7 +37,6 @@ func RegisterAllTests() {
 	_ = registry.Register("hardware", "VerifyTransceiversManufacturers", hardware.NewVerifyTransceiversManufacturers)
 	_ = registry.Register("hardware", "VerifyTransceiversTemperature", hardware.NewVerifyTransceiversTemperature)
 	_ = registry.Register("hardware", "VerifyInventory", hardware.NewVerifyInventory)
-	_ = registry.Register("hardware", "VerifyPowerSupplies", NewVerifyPowerSupplies)
 	_ = registry.Register("hardware", "VerifyUnifiedForwardingTableMode", hardware.NewVerifyUnifiedForwardingTableMode)
 	_ = registry.Register("hardware", "VerifyTcamProfile", hardware.NewVerifyTcamProfile)
 
@@ -189,10 +188,6 @@ func RegisterAllTests() {
 	_ = registry.Register("vxlan", "VerifyVxlanVniBinding", vxlan.NewVerifyVxlanVniBinding)
 	_ = registry.Register("vxlan", "VerifyVxlanVtep", vxlan.NewVerifyVxlanVtep)
 	_ = registry.Register("vxlan", "VerifyVxlan1ConnSettings", vxlan.NewVerifyVxlan1ConnSettings)
-}
-
-func NewVerifyPowerSupplies(inputs map[string]any) (test.Test, error) {
-	return hardware.NewVerifyInventory(inputs)
 }
 
 func NewVerifyDNSResolution(inputs map[string]any) (test.Test, error) {
