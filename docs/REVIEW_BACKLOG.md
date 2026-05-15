@@ -118,13 +118,25 @@ Two parts:
    edits a NewVerify\* next should migrate it to the helpers; new
    tests should use them from the start.
 
-#### R5. Three commands copy-paste Netbox query parsing; `check.go` is silently missing keys
-`internal/cli/commands/nrfu.go:246-374`, `check.go:129-221`, `inventory.go:241-350` have the same ~110-line block. `check.go` is silently missing `site_id`, `role_id`, `device_type_id`, etc. that nrfu/inventory support, so `--netbox-query site_id=14` works for nrfu/inventory but drops silently in `check`.
+#### ~~R5. Three commands copy-paste Netbox query parsing~~ — already closed by PR #13 (inventory-sources)
 
-Extract one shared `loadNetboxInventoryShared(ctx, opts NetboxOpts) (*inventory.Inventory, error)` (probably in a new `internal/cli/commands/netboxutil.go`) and have all three commands call it.
+Verified post-merge: `nrfu`, `check`, and `inventory` all call
+`LoadInventoryForRun(ctx, InventoryLoadOptions{...})` in
+`internal/cli/commands/inventoryload.go`. Query-string parsing is
+shared via `parseNetboxQueryString`, which already handles `site_id`,
+`role_id`, `device_type_id`, etc. The "check.go silently drops ID
+filters" bug is resolved as a side-effect.
 
-#### R6. `LoadFromNetbox` ignores caller's context
-`pkg/inventory/netbox.go:296-298` uses `context.Background()` and discards the passed-in ctx. After fix #17 (signal handling), this is the last layer that doesn't honor cancellation. Change the signature to accept ctx and thread it through. Breaking API change — coordinate with the v1 surface.
+#### ~~R6. `LoadFromNetbox` ignores caller's context~~ — shipped in `fix/r5-r6-netbox-ctx`
+
+`LoadFromNetbox` and `LoadNetboxInventory` (the back-compat wrappers
+in `pkg/inventory/source_netbox.go`) now take `ctx context.Context` as
+the first parameter and thread it through `NetboxSource.Load(ctx)` →
+`NetboxClient.GetDevices(ctx)` → `http.NewRequestWithContext`. SIGINT
+during a large Netbox fetch now interrupts the run. Breaking API
+change for any external library callers; the migration is a one-line
+addition. Two new tests assert the cancellation path actually reaches
+the HTTP layer.
 
 #### ~~R7. Catalog validation doesn't check registry membership~~ — shipped in `fix/r7-r8-typo-detection`
 

@@ -86,6 +86,47 @@ func TestNetboxSource_LoadHonorsContextCancel(t *testing.T) {
 	}
 }
 
+// TestLoadFromNetbox_HonorsContextCancel asserts that the back-compat
+// wrapper threads ctx all the way through to the HTTP layer (R6).
+// Before the fix, LoadFromNetbox built its own context.Background()
+// and a cancelled caller ctx had no effect.
+func TestLoadFromNetbox_HonorsContextCancel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { cancel() }()
+	_, err := LoadFromNetbox(ctx, NetboxConfig{URL: srv.URL, Token: "x"}, NetboxQuery{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "context") {
+		t.Errorf("expected context error, got %v", err)
+	}
+}
+
+func TestLoadNetboxInventory_HonorsContextCancel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	tmp := writeYAML(t, `
+netbox:
+  url: `+srv.URL+`
+  token: x
+credentials:
+  username: admin
+  password: pw
+`)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { cancel() }()
+	_, err := LoadNetboxInventory(ctx, tmp)
+	if err == nil || !strings.Contains(err.Error(), "context") {
+		t.Errorf("expected context error, got %v", err)
+	}
+}
+
 func TestApplyDefaults_EnablePasswordAndTimeout(t *testing.T) {
 	inv := &Inventory{
 		Devices: []device.DeviceConfig{{Name: "r1", Host: "10.0.0.1"}},
@@ -111,6 +152,7 @@ func TestLoadFromNetbox_PassesEnablePasswordAndTimeout(t *testing.T) {
 	defer srv.Close()
 
 	inv, err := LoadFromNetbox(
+		context.Background(),
 		NetboxConfig{URL: srv.URL, Token: "x"},
 		NetboxQuery{},
 		map[string]interface{}{
@@ -139,7 +181,7 @@ func TestLoadFromNetbox_ErrorsOnEmptyInventory(t *testing.T) {
 		w.Write([]byte(`{"results":[]}`))
 	}))
 	defer srv.Close()
-	_, err := LoadFromNetbox(NetboxConfig{URL: srv.URL, Token: "x"}, NetboxQuery{}, nil)
+	_, err := LoadFromNetbox(context.Background(), NetboxConfig{URL: srv.URL, Token: "x"}, NetboxQuery{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "no devices") {
 		t.Errorf("expected no-devices error, got %v", err)
 	}
@@ -165,7 +207,7 @@ credentials:
 	t.Setenv("NETBOX_URL", srv.URL)
 	t.Setenv("NETBOX_TOKEN", "right-token")
 
-	inv, err := LoadNetboxInventory(tmp)
+	inv, err := LoadNetboxInventory(context.Background(), tmp)
 	if err != nil {
 		t.Fatalf("LoadNetboxInventory: %v", err)
 	}
@@ -182,7 +224,7 @@ netbox:
 	// No env vars set — URL is required and missing.
 	t.Setenv("NETBOX_URL", "")
 	t.Setenv("NETBOX_TOKEN", "")
-	_, err := LoadNetboxInventory(tmp)
+	_, err := LoadNetboxInventory(context.Background(), tmp)
 	if err == nil || !strings.Contains(err.Error(), "URL") {
 		t.Errorf("expected URL-required error, got %v", err)
 	}
