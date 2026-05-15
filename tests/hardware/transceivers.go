@@ -73,6 +73,43 @@ func NewVerifyTransceivers(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// TransceiverReport is the structured record of one populated optic,
+// surfaced in TestResult.Details so the HTML reporter renders a typed
+// table. JSON keys mirror what pkg/reporter's transceivers block reads.
+type TransceiverReport struct {
+	Port         string  `json:"port"`
+	Slot         string  `json:"slot,omitempty"`
+	MediaType    string  `json:"media_type,omitempty"`
+	VendorName   string  `json:"vendor_name,omitempty"`
+	VendorSN     string  `json:"vendor_sn,omitempty"`
+	Channel      string  `json:"channel,omitempty"`
+	TemperatureC float64 `json:"temperature_c,omitempty"`
+	VoltageV     float64 `json:"voltage_v,omitempty"`
+	RxPowerDBM   float64 `json:"rx_power_dbm,omitempty"`
+	TxPowerDBM   float64 `json:"tx_power_dbm,omitempty"`
+	TxBiasMA     float64 `json:"tx_bias_ma,omitempty"`
+	Status       string  `json:"status"` // "ok" | "warning" | "alarm"
+}
+
+// metricThresholds extracts the `{highAlarm, highWarn, lowAlarm,
+// lowWarn}` quartet for one metric sub-object inside `details`.
+// EOS uses this same shape for temperature / voltage / rxPower /
+// txPower / txBias. Returns false on absent or malformed input so
+// callers can skip the threshold check rather than alert on noise.
+func metricThresholds(details map[string]any, key string) (highAlarm, highWarn, lowAlarm, lowWarn float64, ok bool) {
+	sub, ok := details[key].(map[string]any)
+	if !ok {
+		return 0, 0, 0, 0, false
+	}
+	gf := func(k string) float64 {
+		if v, ok := sub[k].(float64); ok {
+			return v
+		}
+		return 0
+	}
+	return gf("highAlarm"), gf("highWarn"), gf("lowAlarm"), gf("lowWarn"), true
+}
+
 func (t *VerifyTransceivers) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -86,8 +123,10 @@ func (t *VerifyTransceivers) Execute(ctx context.Context, dev device.Device) (*t
 		return skipResult, nil
 	}
 
+	// Use the `detail` variant so the per-metric threshold sub-objects
+	// (highAlarm/highWarn/lowAlarm/lowWarn) come back populated.
 	cmd := device.Command{
-		Template: "show interfaces transceiver",
+		Template: "show interfaces transceiver detail",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -99,99 +138,192 @@ func (t *VerifyTransceivers) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-	issues := []string{}
-
-	if transceiverData, ok := cmdResult.Output.(map[string]any); ok {
-		if interfaces, ok := transceiverData["interfaces"].(map[string]any); ok {
-			for intfName, intfData := range interfaces {
-				if intf, ok := intfData.(map[string]any); ok {
-					if err := t.validateTransceiver(intfName, intf, &issues); err != nil {
-						issues = append(issues, fmt.Sprintf("%s: %v", intfName, err))
-					}
-				}
-			}
-		}
+	transceiverData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected transceiver output: %v", err)
+		return result, nil
 	}
 
+	interfaces, ok := transceiverData["interfaces"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Transceiver output missing 'interfaces' field"
+		return result, nil
+	}
+
+	var optics []TransceiverReport
+	emptyCount := 0
+	issues := []string{}
+
+	for intfName, raw := range interfaces {
+		intf, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		r := transceiverRecord(intfName, intf)
+		// EOS emits a port entry for every cage even when nothing is
+		// installed. Skip the empties so the report only shows real
+		// populated optics; surface the count separately.
+		if r.MediaType == "" && r.VendorSN == "" {
+			emptyCount++
+			continue
+		}
+		t.validateOptic(&r, intf, &issues)
+		optics = append(optics, r)
+	}
+
+	details := map[string]any{
+		"populated_count": len(optics),
+		"empty_count":     emptyCount,
+		"transceivers":    optics,
+	}
+	if hottest := hottestOptic(optics); hottest != nil {
+		details["hottest_port"] = hottest.Port
+		details["hottest_c"] = hottest.TemperatureC
+	}
 	if len(issues) > 0 {
+		details["issues"] = issues
+	}
+	result.Details = details
+
+	switch {
+	case len(optics) == 0:
+		result.Message = fmt.Sprintf("No transceivers installed (%d empty cages)", emptyCount)
+	case len(issues) > 0:
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Transceiver issues: %v", issues)
+	default:
+		result.Message = fmt.Sprintf("%d transceivers populated, all Ok", len(optics))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyTransceivers) validateTransceiver(intfName string, data map[string]any, issues *[]string) error {
-	if t.CheckManufacturer && len(t.Manufacturers) > 0 {
-		if vendor, ok := data["vendorName"].(string); ok {
-			valid := false
-			for _, allowedMfg := range t.Manufacturers {
-				if strings.Contains(strings.ToLower(vendor), strings.ToLower(allowedMfg)) {
-					valid = true
-					break
-				}
+// transceiverRecord pulls the flat per-port fields from EOS's response.
+// The detail-thresholds sub-object is read separately by validateOptic.
+func transceiverRecord(port string, intf map[string]any) TransceiverReport {
+	r := TransceiverReport{Port: port, Status: "ok"}
+	if v, ok := intf["slot"].(string); ok {
+		r.Slot = v
+	}
+	if v, ok := intf["mediaType"].(string); ok {
+		r.MediaType = v
+	}
+	if v, ok := intf["vendorName"].(string); ok {
+		r.VendorName = v
+	}
+	if v, ok := intf["vendorSn"].(string); ok {
+		r.VendorSN = v
+	}
+	if v, ok := intf["channel"].(string); ok {
+		r.Channel = v
+	}
+	if v, ok := intf["temperature"].(float64); ok {
+		r.TemperatureC = v
+	}
+	if v, ok := intf["voltage"].(float64); ok {
+		r.VoltageV = v
+	}
+	if v, ok := intf["rxPower"].(float64); ok {
+		r.RxPowerDBM = v
+	}
+	if v, ok := intf["txPower"].(float64); ok {
+		r.TxPowerDBM = v
+	}
+	if v, ok := intf["txBias"].(float64); ok {
+		r.TxBiasMA = v
+	}
+	return r
+}
+
+// validateOptic runs the configured threshold checks against EOS's
+// per-metric threshold sub-objects. Updates r.Status so the reporter
+// can colour the row, and appends a human-readable string to issues
+// for the failure message.
+func (t *VerifyTransceivers) validateOptic(r *TransceiverReport, intf map[string]any, issues *[]string) {
+	if t.CheckManufacturer && len(t.Manufacturers) > 0 && r.VendorName != "" {
+		valid := false
+		for _, allowed := range t.Manufacturers {
+			if strings.Contains(strings.ToLower(r.VendorName), strings.ToLower(allowed)) {
+				valid = true
+				break
 			}
-			if !valid {
-				*issues = append(*issues, fmt.Sprintf("%s: unauthorized manufacturer '%s'", intfName, vendor))
-			}
+		}
+		if !valid {
+			*issues = append(*issues, fmt.Sprintf("%s: unauthorized manufacturer %q", r.Port, r.VendorName))
+			r.Status = "alarm"
 		}
 	}
 
-	if details, ok := data["details"].(map[string]any); ok {
-		if t.CheckTemperature {
-			if tempData, ok := details["temperature"].(map[string]any); ok {
-				if temp, ok := tempData["temp"].(float64); ok {
-					if highAlarm, ok := tempData["highAlarm"].(float64); ok {
-						if temp >= highAlarm {
-							*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C exceeds high alarm %.1f°C",
-								intfName, temp, highAlarm))
-						}
-					}
-					if highWarn, ok := tempData["highWarn"].(float64); ok {
-						if temp >= highWarn {
-							*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C exceeds high warning %.1f°C",
-								intfName, temp, highWarn))
-						}
-					}
-				}
-			}
-		}
+	details, ok := intf["details"].(map[string]any)
+	if !ok {
+		return
+	}
 
-		if t.CheckVoltage {
-			if voltageData, ok := details["voltage"].(map[string]any); ok {
-				if voltage, ok := voltageData["voltage"].(float64); ok {
-					if highAlarm, ok := voltageData["highAlarm"].(float64); ok {
-						if voltage >= highAlarm {
-							*issues = append(*issues, fmt.Sprintf("%s: voltage %.2fV exceeds high alarm %.2fV",
-								intfName, voltage, highAlarm))
-						}
-					}
-					if lowAlarm, ok := voltageData["lowAlarm"].(float64); ok {
-						if voltage <= lowAlarm {
-							*issues = append(*issues, fmt.Sprintf("%s: voltage %.2fV below low alarm %.2fV",
-								intfName, voltage, lowAlarm))
-						}
-					}
-				}
+	bumpStatus := func(level string) {
+		// alarm > warning > ok; never downgrade.
+		switch r.Status {
+		case "alarm":
+			return
+		case "warning":
+			if level == "alarm" {
+				r.Status = level
 			}
-		}
-
-		if lanes, ok := details["lanes"].([]any); ok {
-			for i, lane := range lanes {
-				if laneData, ok := lane.(map[string]any); ok {
-					if t.CheckTemperature {
-						if rxPower, ok := laneData["rxPower"].(float64); ok {
-							if rxPower < -30 {
-								*issues = append(*issues, fmt.Sprintf("%s lane %d: low RX power %.2f dBm", intfName, i, rxPower))
-							}
-						}
-					}
-				}
-			}
+		default:
+			r.Status = level
 		}
 	}
 
-	return nil
+	checkMetric := func(name, key, unit string, value float64, format string) {
+		if value == 0 {
+			return
+		}
+		hA, hW, lA, lW, ok := metricThresholds(details, key)
+		if !ok {
+			return
+		}
+		switch {
+		case hA > 0 && value >= hA:
+			*issues = append(*issues, fmt.Sprintf("%s: "+format+" ≥ %s high-alarm "+format, r.Port, value, unit, name, hA, unit))
+			bumpStatus("alarm")
+		case lA != 0 && value <= lA:
+			*issues = append(*issues, fmt.Sprintf("%s: "+format+" ≤ %s low-alarm "+format, r.Port, value, unit, name, lA, unit))
+			bumpStatus("alarm")
+		case hW > 0 && value >= hW:
+			*issues = append(*issues, fmt.Sprintf("%s: "+format+" ≥ %s high-warn "+format, r.Port, value, unit, name, hW, unit))
+			bumpStatus("warning")
+		case lW != 0 && value <= lW:
+			*issues = append(*issues, fmt.Sprintf("%s: "+format+" ≤ %s low-warn "+format, r.Port, value, unit, name, lW, unit))
+			bumpStatus("warning")
+		}
+	}
+
+	if t.CheckTemperature {
+		checkMetric("temperature", "temperature", "°C", r.TemperatureC, "%.1f%s")
+	}
+	if t.CheckVoltage {
+		checkMetric("voltage", "voltage", "V", r.VoltageV, "%.2f%s")
+	}
+	// RX/TX power and bias get checked unconditionally — they're the
+	// most useful signals for a flapping optic and have no separate
+	// opt-in flag in the existing schema.
+	checkMetric("rxPower", "rxPower", "dBm", r.RxPowerDBM, "%.2f %s")
+	checkMetric("txPower", "txPower", "dBm", r.TxPowerDBM, "%.2f %s")
+	checkMetric("txBias", "txBias", "mA", r.TxBiasMA, "%.1f %s")
+}
+
+func hottestOptic(optics []TransceiverReport) *TransceiverReport {
+	if len(optics) == 0 {
+		return nil
+	}
+	idx := 0
+	for i := 1; i < len(optics); i++ {
+		if optics[i].TemperatureC > optics[idx].TemperatureC {
+			idx = i
+		}
+	}
+	return &optics[idx]
 }
 
 func (t *VerifyTransceivers) ValidateInput(input any) error {

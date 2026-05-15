@@ -434,10 +434,27 @@ func (t *VerifyNTP) Execute(ctx context.Context, dev device.Device) (*test.TestR
 		}
 	}
 
+	type ntpRow struct {
+		Server    string `json:"server"`
+		Condition string `json:"condition,omitempty"`
+		Stratum   int    `json:"stratum,omitempty"`
+	}
+	rows := make([]ntpRow, 0, len(ntpServers))
+	for name, a := range ntpServers {
+		rows = append(rows, ntpRow{Server: name, Condition: a.Condition, Stratum: a.Stratum})
+	}
+	details := map[string]any{
+		"server_count": len(rows),
+		"servers":      rows,
+	}
 	if len(issues) > 0 {
+		details["issues"] = issues
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("NTP issues: %v", issues)
+	} else if len(rows) > 0 {
+		result.Message = fmt.Sprintf("%d NTP peer(s) configured", len(rows))
 	}
+	result.Details = details
 
 	return result, nil
 }
@@ -836,10 +853,21 @@ func (t *VerifyCoredump) Execute(ctx context.Context, dev device.Device) (*test.
 		}
 	}
 
+	details := map[string]any{}
+	if cores, ok := coredumpData["coreFiles"].([]any); ok {
+		details["user_core_count"] = len(cores)
+	}
+	if cores, ok := coredumpData["kernelCoreFiles"].([]any); ok {
+		details["kernel_core_count"] = len(cores)
+	}
 	if len(issues) > 0 {
+		details["issues"] = issues
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Core dump issues found: %v", issues)
+	} else {
+		result.Message = "No core dumps present"
 	}
+	result.Details = details
 
 	return result, nil
 }

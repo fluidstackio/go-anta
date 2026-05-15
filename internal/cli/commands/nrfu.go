@@ -3,11 +3,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/fluidstackio/go-anta/pkg/device"
@@ -34,7 +36,6 @@ var (
 	ignoreStatus   bool
 	hide           string
 	outputFile     string
-	format         string
 	logLevel       string
 	verbose        bool
 	quiet          bool
@@ -58,7 +59,7 @@ devices are specified in an inventory file.`,
 
 func init() {
 	NrfuCmd.Flags().StringVarP(&inventoryFile, "inventory", "i", "", "inventory file path (required unless using Netbox)")
-	NrfuCmd.Flags().StringVarP(&catalogFile, "catalog", "C", "", "test catalog file path (required)")
+	NrfuCmd.Flags().StringVarP(&catalogFile, "catalog", "c", "", "test catalog file path (required)")
 	NrfuCmd.Flags().StringVar(&netboxURL, "netbox-url", "", "Netbox URL (can also use NETBOX_URL env var)")
 	NrfuCmd.Flags().StringVar(&netboxToken, "netbox-token", "", "Netbox API token (can also use NETBOX_TOKEN env var)")
 	NrfuCmd.Flags().StringVar(&netboxQuery, "netbox-query", "", "Netbox query filter (e.g., 'site=dc1,role=leaf')")
@@ -77,8 +78,7 @@ func init() {
 	NrfuCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running")
 	NrfuCmd.Flags().BoolVar(&ignoreStatus, "ignore-status", false, "always return exit code 0")
 	NrfuCmd.Flags().StringVar(&hide, "hide", "", "hide results by status (success, failure, error, skipped)")
-	NrfuCmd.Flags().StringVarP(&outputFile, "output", "o", "", "output file path")
-	NrfuCmd.Flags().StringVarP(&format, "format", "f", "table", "output format (table, csv, json, markdown)")
+	NrfuCmd.Flags().StringVarP(&outputFile, "output", "o", "", "output file path (default: report.html in cwd; use - for stdout)")
 	NrfuCmd.Flags().StringVar(&logLevel, "log-level", "warn", "log level (trace, debug, info, warn, error, fatal)")
 	NrfuCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output (equivalent to --log-level=debug)")
 	NrfuCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "quiet mode - only show results (equivalent to --log-level=error)")
@@ -103,6 +103,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 
 	// Configure logging based on flags IMMEDIATELY before any other operations
 	configureLogging()
+	runStart := time.Now()
 
 	inv, err := LoadInventoryForRun(ctx, InventoryLoadOptions{
 		Path:           inventoryFile,
@@ -208,22 +209,48 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 	}
 
 	deviceList := make([]device.Device, 0, len(inv.Devices))
+	deviceInfo := make([]reporter.DeviceInfo, 0, len(inv.Devices))
 	for _, devConfig := range inv.Devices {
 		if transport != "" {
 			devConfig.Transport = transport
 		}
+		info := reporter.DeviceInfo{
+			Name:      devConfig.Name,
+			Host:      devConfig.Host,
+			Transport: devConfig.Transport,
+			Port:      devConfig.Port,
+			Tags:      devConfig.Tags,
+		}
 		dev, err := device.New(devConfig)
 		if err != nil {
 			logger.Errorf("Failed to construct device %s: %v", devConfig.Name, err)
+			info.ConnectError = err.Error()
+			deviceInfo = append(deviceInfo, info)
 			continue
 		}
 		if err := dev.Connect(ctx); err != nil {
 			if !silent {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to connect to %s: %v\n", devConfig.Name, err)
 			}
+			info.ConnectError = err.Error()
+			deviceInfo = append(deviceInfo, info)
 			continue
 		}
+		info.Connected = true
+		info.Model = dev.HardwareModel()
+		// EOS version is exposed in `show version`'s `version` field;
+		// Connect already ran the probe but doesn't store the version,
+		// so query once more here. Cheap, and only on devices the test
+		// run will actually use.
+		if v, err := dev.Execute(ctx, device.Command{Template: "show version", Format: "json", UseCache: true}); err == nil {
+			if m, ok := v.Output.(map[string]any); ok {
+				if ver, ok := m["version"].(string); ok {
+					info.EOSVersion = ver
+				}
+			}
+		}
 		deviceList = append(deviceList, dev)
+		deviceInfo = append(deviceInfo, info)
 		defer dev.Disconnect()
 	}
 
@@ -248,31 +275,35 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 		results = filterResults(results, hide)
 	}
 
-	var rep reporter.Reporter
-	switch format {
-	case "csv":
-		rep = reporter.NewCSVReporter()
-	case "json":
-		rep = reporter.NewJSONReporter()
-	case "markdown":
-		rep = reporter.NewMarkdownReporter()
-	default:
-		rep = reporter.NewTableReporter()
+	report := &reporter.Report{
+		Title:     fmt.Sprintf("nrfu — %s", catalogFile),
+		Started:   runStart,
+		Completed: time.Now(),
+		Devices:   deviceInfo,
+		Results:   results,
 	}
 
-	var output = os.Stdout
-	if outputFile != "" {
-		file, err := os.Create(outputFile)
+	// Default output is report.html in the current directory so the
+	// user doesn't get binary-ish HTML dumped to their terminal. Pass
+	// --output - to force stdout, or --output path.html to override.
+	outPath := outputFile
+	if outPath == "" {
+		outPath = "report.html"
+	}
+	var output io.Writer = os.Stdout
+	if outPath != "-" {
+		file, err := os.Create(outPath)
 		if err != nil {
 			return fmt.Errorf("failed to create output file: %w", err)
 		}
 		defer file.Close()
 		output = file
 	}
-
-	rep.SetOutput(output)
-	if err := rep.Report(results); err != nil {
-		return fmt.Errorf("failed to generate report: %w", err)
+	if err := reporter.Render(output, report); err != nil {
+		return fmt.Errorf("failed to render HTML report: %w", err)
+	}
+	if outPath != "-" && !silent {
+		fmt.Fprintf(os.Stderr, "Report written to %s\n", outPath)
 	}
 
 	if !ignoreStatus {

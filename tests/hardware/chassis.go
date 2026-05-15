@@ -138,12 +138,30 @@ func (t *VerifyChassisHealth) Execute(ctx context.Context, dev device.Device) (*
 	}
 	t.checkTemperatureHealth(tempData, &healthIssues)
 
+	details := map[string]any{
+		"cooling_system_status":     strFromMap(coolingData, "systemStatus"),
+		"temperature_system_status": strFromMap(tempData, "systemStatus"),
+	}
 	if len(healthIssues) > 0 {
+		details["issues"] = healthIssues
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Chassis health issues: %v", healthIssues)
+	} else {
+		result.Message = "Cooling, power, and temperature all Ok"
 	}
+	result.Details = details
 
 	return result, nil
+}
+
+// strFromMap is a tiny convenience: returns m[k] as a string when it
+// is one, otherwise "". Used for Details summary fields where a
+// missing key should produce a blank rather than a panic.
+func strFromMap(m map[string]any, k string) string {
+	if v, ok := m[k].(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (t *VerifyChassisHealth) checkCoolingHealth(coolingData map[string]any, issues *[]string) {
@@ -365,10 +383,20 @@ func (t *VerifyHardwareCapacityUtilization) Execute(ctx context.Context, dev dev
 		t.checkAclTableUtilization(ctx, dev, &utilizationIssues)
 	}
 
+	details := map[string]any{
+		"max_utilization_pct":    t.MaxUtilizationPct,
+		"check_forwarding_table": t.CheckForwardingTable,
+		"check_route_table":      t.CheckRouteTable,
+		"check_acl_table":        t.CheckAclTable,
+	}
 	if len(utilizationIssues) > 0 {
+		details["issues"] = utilizationIssues
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Hardware capacity utilization issues: %v", utilizationIssues)
+	} else {
+		result.Message = fmt.Sprintf("All checked tables within %d%% utilization threshold", t.MaxUtilizationPct)
 	}
+	result.Details = details
 
 	return result, nil
 }

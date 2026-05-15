@@ -159,6 +159,19 @@ func NewVerifyEnvironmentCooling(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// FanReport is the structured record of one fan, surfaced in
+// TestResult.Details so the HTML reporter can render the table
+// instead of the old success-with-no-info case.
+type FanReport struct {
+	Name           string `json:"name"`
+	Container      string `json:"container,omitempty"`
+	Label          string `json:"label,omitempty"`
+	Status         string `json:"status"`
+	ActualSpeedPct int    `json:"actual_speed_pct,omitempty"`
+	ActualSpeedRPM int    `json:"actual_speed_rpm,omitempty"`
+	ConfiguredPct  int    `json:"configured_pct,omitempty"`
+}
+
 func (t *VerifyEnvironmentCooling) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -192,65 +205,120 @@ func (t *VerifyEnvironmentCooling) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
+	var fans []FanReport
 	fanIssues := []string{}
 
-	// Check power supply fans
-	if powerSupplies, ok := coolingData["powerSupplySlots"].(map[string]any); ok {
-		for psName, psData := range powerSupplies {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupplyFans(psName, ps, &fanIssues)
-			}
-		}
-	}
+	// Power supply fans. EOS returns powerSupplySlots as either a map
+	// keyed by slot name or a list of slot objects (each with `label`)
+	// depending on platform/version — walk both shapes.
+	walkContainer(coolingData["powerSupplySlots"], func(slotName string, slot map[string]any) {
+		t.collectContainerFans(fmt.Sprintf("PowerSupplySlot/%s", slotName), slot, &fans, &fanIssues)
+	})
 
-	// Check fan trays
-	if fanTrays, ok := coolingData["fanTraySlots"].(map[string]any); ok {
-		for fanTrayName, fanTrayData := range fanTrays {
-			if fanTray, ok := fanTrayData.(map[string]any); ok {
-				t.checkFanTray(fanTrayName, fanTray, &fanIssues)
-			}
-		}
-	}
+	// Fan trays (same dual shape).
+	walkContainer(coolingData["fanTraySlots"], func(trayName string, tray map[string]any) {
+		t.collectContainerFans(fmt.Sprintf("FanTraySlot/%s", trayName), tray, &fans, &fanIssues)
+	})
 
-	// Check individual fans
-	if fans, ok := coolingData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkIndividualFan(fanName, fan, &fanIssues)
-			}
-		}
-	}
+	// Top-level individual fans (chassis fans without a tray).
+	walkContainer(coolingData["fans"], func(fanName string, fan map[string]any) {
+		fr := fanRecord(fanName, "", fan)
+		fans = append(fans, fr)
+		t.checkFanStatus(fr.Name, fan, &fanIssues)
+	})
 
+	// Always populate Details so the report shows what was checked,
+	// even on a clean pass.
+	details := map[string]any{
+		"fan_count": len(fans),
+		"fans":      fans,
+	}
+	if v, ok := coolingData["coolingMode"].(string); ok {
+		details["cooling_mode"] = v
+	}
+	if v, ok := coolingData["airflowDirection"].(string); ok {
+		details["airflow_direction"] = v
+	}
+	if v, ok := coolingData["ambientTemperature"].(float64); ok {
+		details["ambient_temperature_c"] = v
+	}
 	if len(fanIssues) > 0 {
+		details["issues"] = fanIssues
+	}
+	result.Details = details
+
+	switch {
+	case len(fans) == 0:
+		result.Status = test.TestError
+		result.Message = "No fans found in cooling output (unexpected on a physical platform)"
+	case len(fanIssues) > 0:
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Cooling fan issues: %v", fanIssues)
+	default:
+		result.Message = fmt.Sprintf("%d fans, all Ok", len(fans))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyEnvironmentCooling) checkPowerSupplyFans(psName string, psData map[string]any, issues *[]string) {
-	if fans, ok := psData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkFanStatus(fmt.Sprintf("%s/%s", psName, fanName), fan, issues)
+// collectContainerFans walks a power-supply or fan-tray entry,
+// extracting its inner fans and appending to the report slice.
+func (t *VerifyEnvironmentCooling) collectContainerFans(container string, entry map[string]any, fans *[]FanReport, issues *[]string) {
+	walkContainer(entry["fans"], func(fanName string, fan map[string]any) {
+		fr := fanRecord(fanName, container, fan)
+		*fans = append(*fans, fr)
+		t.checkFanStatus(fr.Name, fan, issues)
+	})
+}
+
+// walkContainer iterates an EOS sub-object that can come back as either
+// a {label → entry} map or a [entry,…] list. EOS varies by platform.
+func walkContainer(raw any, cb func(name string, entry map[string]any)) {
+	switch c := raw.(type) {
+	case map[string]any:
+		for name, val := range c {
+			if entry, ok := val.(map[string]any); ok {
+				cb(name, entry)
 			}
+		}
+	case []any:
+		for i, val := range c {
+			entry, ok := val.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := fmt.Sprintf("%d", i+1)
+			if lbl, ok := entry["label"].(string); ok && lbl != "" {
+				name = lbl
+			}
+			cb(name, entry)
 		}
 	}
 }
 
-func (t *VerifyEnvironmentCooling) checkFanTray(fanTrayName string, fanTrayData map[string]any, issues *[]string) {
-	if fans, ok := fanTrayData["fans"].(map[string]any); ok {
-		for fanName, fanData := range fans {
-			if fan, ok := fanData.(map[string]any); ok {
-				t.checkFanStatus(fmt.Sprintf("%s/%s", fanTrayName, fanName), fan, issues)
-			}
-		}
+func fanRecord(name, container string, fan map[string]any) FanReport {
+	fr := FanReport{
+		Name:      name,
+		Container: container,
 	}
-}
-
-func (t *VerifyEnvironmentCooling) checkIndividualFan(fanName string, fanData map[string]any, issues *[]string) {
-	t.checkFanStatus(fanName, fanData, issues)
+	if v, ok := fan["status"].(string); ok {
+		fr.Status = v
+	}
+	if v, ok := fan["label"].(string); ok {
+		fr.Label = v
+	}
+	if v, ok := fan["actualSpeed"].(float64); ok {
+		fr.ActualSpeedPct = int(v)
+	}
+	if v, ok := fan["configuredSpeed"].(float64); ok {
+		fr.ConfiguredPct = int(v)
+	}
+	// Some EOS variants expose absolute RPM under "speed" instead of
+	// percent. Capture for completeness; the report shows both fields.
+	if v, ok := fan["speed"].(float64); ok && v > 100 {
+		fr.ActualSpeedRPM = int(v)
+	}
+	return fr
 }
 
 func (t *VerifyEnvironmentCooling) checkFanStatus(fanName string, fanData map[string]any, issues *[]string) {
@@ -344,6 +412,23 @@ func NewVerifyEnvironmentPower(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
+// PSUReport is the structured record of one power supply, surfaced
+// in TestResult.Details so the HTML reporter renders a typed table
+// instead of opaque JSON. JSON keys mirror what pkg/reporter's
+// psusBlock looks for (slot, model, state, input_voltage,
+// output_state, capacity_w, output_power_w).
+type PSUReport struct {
+	Slot          string  `json:"slot"`
+	Model         string  `json:"model,omitempty"`
+	State         string  `json:"state"`
+	InputVoltage  float64 `json:"input_voltage,omitempty"`
+	OutputVoltage float64 `json:"output_voltage,omitempty"`
+	OutputCurrent float64 `json:"output_current,omitempty"`
+	OutputPowerW  float64 `json:"output_power_w,omitempty"`
+	CapacityW     float64 `json:"capacity_w,omitempty"`
+	OutputState   string  `json:"output_state,omitempty"`
+}
+
 func (t *VerifyEnvironmentPower) Execute(ctx context.Context, dev device.Device) (*test.TestResult, error) {
 	result := &test.TestResult{
 		TestName:   t.Name(),
@@ -377,28 +462,92 @@ func (t *VerifyEnvironmentPower) Execute(ctx context.Context, dev device.Device)
 		return result, nil
 	}
 
+	var psus []PSUReport
 	powerIssues := []string{}
 
-	if powerSupplies, ok := powerData["powerSupplies"].(map[string]any); ok {
-		for psName, psData := range powerSupplies {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupply(psName, ps, &powerIssues)
-			}
-		}
-	} else if powerSupplySlots, ok := powerData["powerSupplySlots"].(map[string]any); ok {
-		for psName, psData := range powerSupplySlots {
-			if ps, ok := psData.(map[string]any); ok {
-				t.checkPowerSupply(psName, ps, &powerIssues)
-			}
-		}
+	// EOS surfaces PSUs under either `powerSupplies` (common) or
+	// `powerSupplySlots` (some platforms), and as either a {slot →
+	// entry} map or a list. walkContainer handles both shapes.
+	collect := func(name string, ps map[string]any) {
+		r := psuRecord(name, ps)
+		psus = append(psus, r)
+		t.checkPowerSupply(r.Slot, ps, &powerIssues)
+	}
+	switch {
+	case powerData["powerSupplies"] != nil:
+		walkContainer(powerData["powerSupplies"], collect)
+	case powerData["powerSupplySlots"] != nil:
+		walkContainer(powerData["powerSupplySlots"], collect)
 	}
 
+	details := map[string]any{
+		"psu_count":      len(psus),
+		"power_supplies": psus,
+	}
+	var totalCap, totalDraw float64
+	for _, p := range psus {
+		totalCap += p.CapacityW
+		totalDraw += p.OutputPowerW
+	}
+	if totalCap > 0 {
+		details["total_capacity_w"] = totalCap
+	}
+	if totalDraw > 0 {
+		details["total_draw_w"] = totalDraw
+	}
 	if len(powerIssues) > 0 {
+		details["issues"] = powerIssues
+	}
+	result.Details = details
+
+	switch {
+	case len(psus) == 0:
+		result.Status = test.TestError
+		result.Message = "No power supplies found (unexpected on a physical platform)"
+	case len(powerIssues) > 0:
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Power supply issues: %v", powerIssues)
+	default:
+		result.Message = fmt.Sprintf("%d power supplies, all Ok", len(psus))
 	}
 
 	return result, nil
+}
+
+// psuRecord extracts the structured PSU shape from EOS's raw JSON.
+// EOS varies: some platforms use `state`, others `status`; capacity
+// can be missing on lower-end models. We capture whatever is there.
+func psuRecord(name string, ps map[string]any) PSUReport {
+	r := PSUReport{Slot: name}
+	if v, ok := ps["state"].(string); ok && v != "" {
+		r.State = v
+	} else if v, ok := ps["status"].(string); ok {
+		r.State = v
+	}
+	if v, ok := ps["modelName"].(string); ok {
+		r.Model = v
+	} else if v, ok := ps["model"].(string); ok {
+		r.Model = v
+	}
+	if v, ok := ps["outputState"].(string); ok {
+		r.OutputState = v
+	}
+	if v, ok := ps["inputVoltage"].(float64); ok {
+		r.InputVoltage = v
+	}
+	if v, ok := ps["outputVoltage"].(float64); ok {
+		r.OutputVoltage = v
+	}
+	if v, ok := ps["outputCurrent"].(float64); ok {
+		r.OutputCurrent = v
+	}
+	if v, ok := ps["outputPower"].(float64); ok {
+		r.OutputPowerW = v
+	}
+	if v, ok := ps["capacity"].(float64); ok {
+		r.CapacityW = v
+	}
+	return r
 }
 
 func (t *VerifyEnvironmentPower) checkPowerSupply(psName string, psData map[string]any, issues *[]string) {
