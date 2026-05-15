@@ -91,10 +91,11 @@ type testView struct {
 // detailBlock is one rendered section under a test's Details. Kind
 // selects the template path; only the matching fields are populated.
 type detailBlock struct {
-	Kind  string // "fans" | "psus" | "summary" | "issues" | "json"
+	Kind  string // "fans" | "psus" | "temps" | "summary" | "issues" | "json"
 	Title string
 	Fans  []fanRow
 	PSUs  []psuRow
+	Temps []tempRow
 	KV    []kvRow
 	Items []string // for "issues"
 	JSON  string   // for "json"
@@ -108,6 +109,19 @@ type fanRow struct {
 	StatusClass    string
 	ActualSpeedPct int
 	ConfiguredPct  int
+}
+
+type tempRow struct {
+	Container   string
+	Name        string
+	Description string
+	CurrentC    string // pre-formatted "32.5 °C"
+	OverheatC   string // pre-formatted threshold or "—"
+	CriticalC   string
+	HeadroomC   string // overheat - current, "10.0 °C" or ""
+	Status      string
+	StatusClass string
+	BarPct      int // 0..100 ratio of current/overheat
 }
 
 type psuRow struct {
@@ -286,6 +300,10 @@ func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
 		blocks = append(blocks, psusBlock(psus))
 		consumed["power_supplies"] = true
 	}
+	if temps, ok := m["temperatures"].([]any); ok {
+		blocks = append(blocks, tempsBlock(temps))
+		consumed["temperatures"] = true
+	}
 	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
 		var list []string
 		for _, item := range issues {
@@ -385,6 +403,67 @@ func psusBlock(items []any) detailBlock {
 			}
 		}
 		out.PSUs = append(out.PSUs, row)
+	}
+	return out
+}
+
+func tempsBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "temps", Title: "Temperatures"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := tempRow{
+			Container:   strVal(m, "container"),
+			Name:        strVal(m, "name"),
+			Description: strVal(m, "description"),
+		}
+		cur, _ := m["current_c"].(float64)
+		overheat, _ := m["overheat_c"].(float64)
+		critical, _ := m["critical_c"].(float64)
+		if cur > 0 {
+			row.CurrentC = fmt.Sprintf("%.1f °C", cur)
+		}
+		if overheat > 0 {
+			row.OverheatC = fmt.Sprintf("%.0f °C", overheat)
+			if cur > 0 {
+				row.HeadroomC = fmt.Sprintf("%.1f °C", overheat-cur)
+				row.BarPct = int(100 * cur / overheat)
+				if row.BarPct < 0 {
+					row.BarPct = 0
+				}
+				if row.BarPct > 100 {
+					row.BarPct = 100
+				}
+			}
+		}
+		if critical > 0 {
+			row.CriticalC = fmt.Sprintf("%.0f °C", critical)
+		}
+		// Status priority:
+		//   inAlert true OR hwStatus != ok → failure
+		//   current ≥ overheat              → error (warning tier)
+		//   otherwise                       → success
+		hwStatus := strVal(m, "status")
+		inAlert, _ := m["in_alert"].(bool)
+		row.Status = hwStatus
+		switch {
+		case inAlert, hwStatus != "" && !strings.EqualFold(hwStatus, "ok"):
+			row.StatusClass = "failure"
+			if row.Status == "" {
+				row.Status = "alert"
+			}
+		case overheat > 0 && cur >= overheat:
+			row.StatusClass = "error"
+			row.Status = "near overheat"
+		default:
+			row.StatusClass = "success"
+			if row.Status == "" {
+				row.Status = "ok"
+			}
+		}
+		out.Temps = append(out.Temps, row)
 	}
 	return out
 }

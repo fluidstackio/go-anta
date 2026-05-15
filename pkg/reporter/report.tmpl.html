@@ -303,6 +303,25 @@
   .icon svg { width: 16px; height: 16px; }
   .icon.fan        { color: #66a3ff; }
   .icon.psu        { color: #f0b352; }
+  .icon.temp       { color: #e07b7b; }
+  .bar {
+    display: inline-block;
+    width: 70px;
+    height: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .bar > span {
+    display: block;
+    height: 100%;
+    background: var(--success);
+    transition: width 0.2s ease;
+  }
+  .bar.warm > span { background: var(--error); }
+  .bar.hot  > span { background: var(--failure); }
   .pill {
     display: inline-block;
     padding: 1px 8px;
@@ -446,6 +465,8 @@
                 {{- template "fansTable" . }}
               {{- else if eq .Kind "psus" }}
                 {{- template "psusTable" . }}
+              {{- else if eq .Kind "temps" }}
+                {{- template "tempsTable" . }}
               {{- else if eq .Kind "summary" }}
                 {{- template "summaryGrid" . }}
               {{- else if eq .Kind "issues" }}
@@ -481,6 +502,8 @@
 {{ define "fanIcon" }}<span class="icon fan" aria-label="fan"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4a2 2 0 0 1 2 2c0 1.86-1.4 3.39-3.2 3.86C9.18 7.07 10.74 4 12 4zm6 6a2 2 0 0 1 2 2c0 1.26-3.07 2.82-5.86 1.2C14.61 11.4 16.14 10 18 10zM4 14a2 2 0 0 1-2-2c0-1.26 3.07-2.82 5.86-1.2C7.39 12.6 5.86 14 4 14zm8 6a2 2 0 0 1-2-2c0-1.86 1.4-3.39 3.2-3.86C14.82 16.93 13.26 20 12 20zm0-8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg></span>{{ end }}
 
 {{ define "psuIcon" }}<span class="icon psu" aria-label="power supply"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z"/></svg></span>{{ end }}
+
+{{ define "tempIcon" }}<span class="icon temp" aria-label="temperature"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 0-3 3v9a5 5 0 1 0 6 0V5a3 3 0 0 0-3-3zm0 17a3 3 0 0 1-1-5.83V5a1 1 0 0 1 2 0v8.17A3 3 0 0 1 12 19z"/></svg></span>{{ end }}
 
 {{ define "fansTable" }}
 <table class="detail">
@@ -524,6 +547,42 @@
       <td class="num">{{ if .OutputPower }}{{ .OutputPower }}{{ else }}—{{ end }}</td>
       <td class="num">{{ if .Capacity }}{{ .Capacity }}{{ else }}—{{ end }}</td>
       <td class="num">{{ if .LoadPct }}{{ .LoadPct }}{{ else }}—{{ end }}</td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "tempsTable" }}
+<table class="detail">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Sensor</th>
+      <th>Description</th>
+      <th>Container</th>
+      <th>Current</th>
+      <th>Overheat</th>
+      <th>Critical</th>
+      <th>Headroom</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{- range .Temps }}
+    <tr>
+      <td>{{ template "tempIcon" }}</td>
+      <td class="mono">{{ if .Name }}{{ .Name }}{{ else }}—{{ end }}</td>
+      <td>{{ if .Description }}{{ .Description }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .Container }}{{ .Container }}{{ else }}—{{ end }}</td>
+      <td class="num">
+        {{ if .CurrentC }}{{ .CurrentC }}{{ else }}—{{ end }}
+        {{ if .BarPct }}<span class="bar {{ if ge .BarPct 90 }}hot{{ else if ge .BarPct 75 }}warm{{ end }}"><span style="width:{{ .BarPct }}%"></span></span>{{ end }}
+      </td>
+      <td class="num">{{ if .OverheatC }}{{ .OverheatC }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .CriticalC }}{{ .CriticalC }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .HeadroomC }}{{ .HeadroomC }}{{ else }}—{{ end }}</td>
+      <td><span class="pill {{ .StatusClass }}">{{ .Status }}</span></td>
     </tr>
     {{- end }}
   </tbody>

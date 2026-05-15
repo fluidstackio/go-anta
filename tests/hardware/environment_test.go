@@ -55,6 +55,97 @@ func TestPowerSupplyParse_RealEOSShape(t *testing.T) {
 	}
 }
 
+func TestTempSensorParse_NestedAndTopLevel(t *testing.T) {
+	// Real EOS shape: chassis sensors live at top-level `tempSensors`
+	// while PSU-embedded ones are under powerSupplySlots[].tempSensors.
+	// Both must contribute to the report.
+	tempData := map[string]any{
+		"systemStatus": "temperatureOk",
+		"tempSensors": []any{
+			map[string]any{
+				"name":               "TempSensor1",
+				"description":        "Local1",
+				"currentTemperature": float64(24.8),
+				"overheatThreshold":  float64(90),
+				"criticalThreshold":  float64(100),
+				"hwStatus":           "ok",
+			},
+		},
+		"powerSupplySlots": []any{
+			map[string]any{
+				"relPos": "1",
+				"tempSensors": []any{
+					map[string]any{
+						"name":               "TempSensorP1/1",
+						"description":        "Ambient",
+						"currentTemperature": float64(33),
+						"overheatThreshold":  float64(65),
+						"criticalThreshold":  float64(70),
+						"hwStatus":           "ok",
+					},
+				},
+			},
+		},
+	}
+
+	var sensors []TempSensorReport
+	walkContainer(tempData["tempSensors"], func(_ string, m map[string]any) {
+		sensors = append(sensors, tempSensorRecord("chassis", m))
+	})
+	walkContainer(tempData["powerSupplySlots"], func(slotName string, slot map[string]any) {
+		walkContainer(slot["tempSensors"], func(_ string, m map[string]any) {
+			sensors = append(sensors, tempSensorRecord("PSU"+slotName, m))
+		})
+	})
+
+	if len(sensors) != 2 {
+		t.Fatalf("expected 2 sensors (1 chassis + 1 PSU), got %d", len(sensors))
+	}
+	byName := map[string]TempSensorReport{}
+	for _, s := range sensors {
+		byName[s.Name] = s
+	}
+	if byName["TempSensor1"].Container != "chassis" {
+		t.Errorf("chassis sensor container: %+v", byName["TempSensor1"])
+	}
+	if byName["TempSensorP1/1"].Container != "PSU1" {
+		t.Errorf("PSU sensor container: %+v", byName["TempSensorP1/1"])
+	}
+	if byName["TempSensorP1/1"].CriticalC != 70 {
+		t.Errorf("PSU sensor critical threshold: %+v", byName["TempSensorP1/1"])
+	}
+}
+
+func TestTempSensorParse_AlertThresholdLegacy(t *testing.T) {
+	// Older EOS exposes `alertThreshold` instead of `criticalThreshold`.
+	s := tempSensorRecord("chassis", map[string]any{
+		"name":               "Old",
+		"currentTemperature": float64(50),
+		"alertThreshold":     float64(85),
+		"hwStatus":           "ok",
+	})
+	if s.CriticalC != 85 {
+		t.Errorf("alertThreshold should fall back into CriticalC, got %v", s.CriticalC)
+	}
+}
+
+func TestTempSensorParse_FlagsCriticalAndOverheat(t *testing.T) {
+	tt := &VerifyTemperature{FailureMargin: 0}
+	hot := TempSensorReport{
+		Name:      "T1",
+		Container: "chassis",
+		CurrentC:  100,
+		CriticalC: 70,
+		OverheatC: 65,
+		Status:    "ok",
+	}
+	var warnings, alerts []string
+	tt.checkSensor(hot, &warnings, &alerts)
+	if len(alerts) == 0 {
+		t.Errorf("expected critical alert, got %v / %v", alerts, warnings)
+	}
+}
+
 func TestPowerSupplyParse_StatusFallback(t *testing.T) {
 	// Some EOS variants use `status` instead of `state`; the record
 	// helper falls back when state is missing.

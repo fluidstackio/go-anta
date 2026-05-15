@@ -228,6 +228,55 @@ func TestRender_PSUsTable(t *testing.T) {
 	}
 }
 
+func TestRender_TempsTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyTemperature",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"temperatures": []any{
+						map[string]any{
+							"name":        "T1",
+							"description": "Ambient",
+							"container":   "chassis",
+							"current_c":   float64(32.5),
+							"overheat_c":  float64(65),
+							"critical_c":  float64(70),
+							"status":      "ok",
+						},
+						map[string]any{
+							"name":        "T2",
+							"description": "ASIC",
+							"container":   "chassis",
+							"current_c":   float64(95),
+							"overheat_c":  float64(95),
+							"critical_c":  float64(100),
+							"status":      "ok",
+						},
+					},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	for _, want := range []string{
+		`class="icon temp"`,
+		"32.5 °C",
+		"65 °C",
+		"95 °C",
+		`class="bar hot"`, // T2 is at 100% of overheat
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+}
+
 func TestRender_IssuesList(t *testing.T) {
 	r := &Report{
 		Started: time.Now(),
