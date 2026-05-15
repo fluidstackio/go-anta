@@ -44,6 +44,14 @@ Six parallel review agents covered the whole codebase (~23k LOC) by area:
 
 All 22 commits are independent and reviewable. Build + `go vet` clean throughout.
 
+### Second-pass PRs (post-merge)
+
+| PR | What it closes / adds |
+|---|---|
+| #16 `feat/gnoi-ping-traceroute` | Replaces CLI-parsed `ping` with gNOI System.Ping; adds `VerifyTraceroute`. `Device.Ping`/`Device.Traceroute` interface methods; `GNMIDevice` implementation; `EOSDevice` returns `ErrDiagUnsupported`. **Supersedes the LLDP/NTP half of R11 for ping specifically** (the regex parser is gone) and supplies the missing traceroute capability the original review did not call out. |
+| #17 `fix/backlog-cleanup` | Ships R3 (silent-PASS sweep across routing/static, vxlan/*, stp/*, vlan/*, system/configuration, services, logging), R11 (NTP/LLDP substring match → exact match w/ FQDN tolerance), R12 (`VerifySTPMode` rewrite against real EOS shape — broader than the original "normalize rapidPvst" framing), R13 (memory units; flash via `show file systems`), R16 (UDP port typo). |
+| #18 `fix/bgp-r1-afi-safi` | Ships R1 (the 5 BGP sub-items above). |
+
 ## Remaining work — prioritized
 
 Each item below has a concrete file:line anchor and the rough shape of the fix. Severity reflects production impact, not implementation difficulty.
@@ -74,29 +82,16 @@ with `cmd/debug` against `examples/wdl101-inventory.yaml`).
 
 ### HIGH — broad correctness gaps
 
-#### R3. Silent-PASS sweep — remaining packages
-The `test.AsMap` helper exists; the systemic fix is the same: prepend a guard before each unguarded top-level cast. Files with known sites (per the reviewer reports):
+#### ~~R3. Silent-PASS sweep — remaining packages~~ — shipped in PR #17
 
-- `tests/routing/static.go:128-180` (deeply nested 6-level traversal)
-- `tests/routing/path_selection.go` — most sites correctly error; spot-check
-- `tests/vxlan/conn_settings.go:84-128` — if `interfaces` key absent → silent pass
-- `tests/vxlan/interface.go`, `vxlan/config_sanity.go`, `vxlan/vni_binding.go`, `vxlan/vtep.go` — same pattern
-- `tests/stp/stp_tests.go:80-103` (and ~5 other `VerifyStp*` tests)
-- `tests/evpn/type5_routes.go` (after R2 is decided)
-- `tests/vlan/internal_policy.go`, `vlan/dynamic_source.go` — same pattern (vlan/status.go was OK)
-- `tests/system/configuration.go` — check `VerifyRunningConfigDiffs` and `VerifyZeroTouch` if present
-- `tests/system/system_tests.go:967, 667` — VerifyCPUUtilization and VerifyReload already have fallthroughs but verify
-- `tests/logging/logging_tests.go` (many tests; reviewer flagged them as misclassifying parse-fail as TestFailure rather than TestError)
-- `tests/services/services_tests.go` — VerifyHostname is correct; others should be checked
-
-Recipe: for each `if XxxData, ok := cmdResult.Output.(map[string]any); ok {` with no else, prepend
-```go
-if _, err := test.AsMap(cmdResult.Output); err != nil {
-    result.Status = test.TestError
-    result.Message = fmt.Sprintf("Unexpected output: %v", err)
-    return result, nil
-}
-```
+Guards landed across `tests/routing/static.go`, `tests/vxlan/*`, `tests/stp/*`,
+`tests/vlan/{internal_policy,dynamic_source,status}.go`,
+`tests/system/configuration.go`, `tests/services/services_tests.go`, and
+`tests/logging/logging_tests.go`. STP work surfaced *additional* schema
+bugs beyond R3's recipe — six STP tests were reading non-existent fields
+(`instances` / `protocolMode` / `spanningTreeInstances` as slice) so they
+got real rewrites against EOS's actual `spanningTreeInstances` map. EVPN
+Type-5 deliberately deferred until R2 is decided.
 
 #### R4. `ValidateInput` is mostly dead code
 Across all `tests/`, `ValidateInput` either returns nil (stub) or validates the post-constructor struct rather than the raw `input` map. A user typo like `peer_addres:` produces an empty parsed value and either a vacuous PASS or "no peers found" — the real cause (key typo) is never surfaced.
@@ -137,12 +132,12 @@ Extract one shared `loadNetboxInventoryShared(ctx, opts NetboxOpts) (*inventory.
 ### MEDIUM — design / correctness, less urgent
 
 - **R10. `tests/system/system_tests.go:152` `parseVersion`** uses `fmt.Sscanf` with discarded error; `4.28.1F-rc.2` and `4.28.1F-rc.1` parse identically. Use a real version parser.
-- **R11. NTP/LLDP bidirectional `strings.Contains`** (`tests/system/system_tests.go:382-421`, `tests/connectivity/lldp.go:156`). `10.1.1.1` matches `10.1.1.10`; `spine1` matches `spine100`. Switch to exact match or anchored regex.
-- **R12. STP mode validation lists `rapidPvst`** (`tests/stp/stp_tests.go:117`). EOS returns `rapid-pvst`. Anyone passing the validator's accepted value always fails the device comparison. Normalize like `normalizeOSPFState`.
-- **R13. `hardware/inventory.go:113,122` likely off by 1024×** in memory/flash MB calc. EOS reports `memTotal` in KB, code divides by 1024 twice. Verify against actual EOS output and adjust.
+- ~~**R11. NTP/LLDP bidirectional `strings.Contains`**~~ — shipped in PR #17. Exact match (case-insensitive, with FQDN tolerance for LLDP `systemName`).
+- ~~**R12. STP mode validation lists `rapidPvst`**~~ — shipped in PR #17. The real fix was bigger: the test was reading non-existent fields entirely; rewritten against `spanningTreeInstances.<key>.protocol` with `normalizeStpMode` lowercase/hyphen-strip.
+- ~~**R13. `hardware/inventory.go` memory off by 1024×**~~ — shipped in PR #17. `memTotal` treated as KB (one divide); flash size source switched from non-existent `flashSize` in `show version` to `show file systems` lookup of the `flash:` filesystem.
 - **R14. `bgp.go` is 3843 lines / 24 tests** — split per concern (session, capabilities, health, routes, config). Extract the repeated VRF→peer lookup helper.
 - **R15. Two near-duplicate runners** (`pkg/test/runner.go` + `progress_runner.go`). Merge so concurrency lives in one place with an injected progress hook. After this you can also implement R9's batching once instead of twice.
-- **R16. UDP port range typo** in `tests/vxlan/conn_settings.go:143` — `65335` should be `65535`.
+- ~~**R16. UDP port range typo**~~ — shipped in PR #17.
 - **R17. `VerifyBGPPeerDropStats` / `VerifyBGPPeerUpdateErrors` accept input as `map`** but the YAML docs show a list. List-shaped inputs are silently ignored. Either accept both or update docs.
 - **R18. `VerifyStpTopologyChanges` double-counts** (`tests/stp/stp_tests.go:551-565`). Per-interface check appends + total sum compared, semantics ambiguous.
 - **R19. Test-result model unclear contract.** `TestResult.Message` is a `%v` blob; `Details` is declared but never written; `CustomField` is dead. Define a structured `Details` shape and remove `CustomField`.
