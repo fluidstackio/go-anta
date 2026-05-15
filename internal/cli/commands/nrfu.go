@@ -59,7 +59,7 @@ devices are specified in an inventory file.`,
 
 func init() {
 	NrfuCmd.Flags().StringVarP(&inventoryFile, "inventory", "i", "", "inventory file path (required unless using Netbox)")
-	NrfuCmd.Flags().StringVarP(&catalogFile, "catalog", "C", "", "test catalog file path (required)")
+	NrfuCmd.Flags().StringVarP(&catalogFile, "catalog", "c", "", "test catalog file path (required)")
 	NrfuCmd.Flags().StringVar(&netboxURL, "netbox-url", "", "Netbox URL (can also use NETBOX_URL env var)")
 	NrfuCmd.Flags().StringVar(&netboxToken, "netbox-token", "", "Netbox API token (can also use NETBOX_TOKEN env var)")
 	NrfuCmd.Flags().StringVar(&netboxQuery, "netbox-query", "", "Netbox query filter (e.g., 'site=dc1,role=leaf')")
