@@ -338,6 +338,57 @@ func TestRender_OpticsTable(t *testing.T) {
 	}
 }
 
+func TestRender_IfaceErrorsTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyInterfaceErrors",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"interfaces_total":   410,
+					"interfaces_clean":   408,
+					"interfaces_errored": 2,
+					"interface_errors": []any{
+						map[string]any{
+							"interface":     "Ethernet1/3",
+							"in_errors":     float64(83),
+							"fcs_errors":    float64(77),
+							"symbol_errors": float64(6),
+						},
+						map[string]any{
+							"interface":  "Ethernet5/1",
+							"out_errors": float64(2),
+						},
+					},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	for _, want := range []string{
+		`class="icon port"`,
+		"Ethernet1/3",
+		`class="num hot">83`,  // in errors
+		`class="num hot">77`,  // fcs
+		`class="num hot">6`,   // symbol
+		`class="num hot">166`, // total
+		"<dt>Interfaces total</dt>",
+		"<dd>410</dd>",
+		"<dt>Interfaces clean</dt>",
+		"<dd>408</dd>",
+		"<dt>Interfaces errored</dt>",
+		"<dd>2</dd>",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+}
+
 func TestRender_IssuesList(t *testing.T) {
 	r := &Report{
 		Started: time.Now(),

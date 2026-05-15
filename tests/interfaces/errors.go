@@ -3,6 +3,7 @@ package interfaces
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"github.com/fluidstackio/go-anta/pkg/test"
@@ -190,9 +191,52 @@ func (t *VerifyInterfaceErrors) Execute(ctx context.Context, dev device.Device) 
 		}
 	}
 
+	// Build the structured Details payload so the HTML reporter can
+	// render a table. Only interfaces with at least one non-zero
+	// counter make the list — a TOR has 400+ interfaces and a sea of
+	// all-zero rows would bury the actual problem.
+	var withErrors []InterfaceErrorCounters
+	for _, c := range deviceErrors {
+		if c.hasErrors() {
+			withErrors = append(withErrors, c)
+		}
+	}
+	sort.Slice(withErrors, func(i, j int) bool {
+		// Worst offenders first, then alphabetical.
+		ti := withErrors[i].FcsErrors + withErrors[i].InErrors + withErrors[i].OutErrors +
+			withErrors[i].SymbolErrors + withErrors[i].AlignmentErrors +
+			withErrors[i].FrameTooShorts + withErrors[i].FrameTooLongs
+		tj := withErrors[j].FcsErrors + withErrors[j].InErrors + withErrors[j].OutErrors +
+			withErrors[j].SymbolErrors + withErrors[j].AlignmentErrors +
+			withErrors[j].FrameTooShorts + withErrors[j].FrameTooLongs
+		if ti != tj {
+			return ti > tj
+		}
+		return withErrors[i].Interface < withErrors[j].Interface
+	})
+
+	details := map[string]any{
+		"interfaces_total":   len(deviceErrors),
+		"interfaces_clean":   len(deviceErrors) - len(withErrors),
+		"interfaces_errored": len(withErrors),
+		"interface_errors":   withErrors,
+	}
+	if len(failures) > 0 {
+		details["issues"] = failures
+	}
+	result.Details = details
+
 	if len(failures) > 0 {
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Interface error counter failures: %v", failures)
+	} else if len(withErrors) > 0 {
+		// Test passed under the configured thresholds, but some
+		// interfaces have nonzero counters. Surface that in the
+		// message so it's not lost in the noise.
+		result.Message = fmt.Sprintf("%d/%d interfaces have nonzero error counters (within thresholds)",
+			len(withErrors), len(deviceErrors))
+	} else {
+		result.Message = fmt.Sprintf("%d interfaces, all error counters at 0", len(deviceErrors))
 	}
 
 	return result, nil
@@ -241,12 +285,18 @@ func (t *VerifyInterfaceErrors) ValidateInput(input any) error {
 }
 
 type InterfaceErrorCounters struct {
-	Interface       string
-	FcsErrors       int
-	AlignmentErrors int
-	SymbolErrors    int
-	InErrors        int
-	OutErrors       int
-	FrameTooShorts  int
-	FrameTooLongs   int
+	Interface       string `json:"interface"`
+	FcsErrors       int    `json:"fcs_errors,omitempty"`
+	AlignmentErrors int    `json:"alignment_errors,omitempty"`
+	SymbolErrors    int    `json:"symbol_errors,omitempty"`
+	InErrors        int    `json:"in_errors,omitempty"`
+	OutErrors       int    `json:"out_errors,omitempty"`
+	FrameTooShorts  int    `json:"frame_too_shorts,omitempty"`
+	FrameTooLongs   int    `json:"frame_too_longs,omitempty"`
+}
+
+// hasErrors returns true when any counter is non-zero. Used to filter
+// the long list of interfaces down to ones the report should surface.
+func (c InterfaceErrorCounters) hasErrors() bool {
+	return c.FcsErrors+c.AlignmentErrors+c.SymbolErrors+c.InErrors+c.OutErrors+c.FrameTooShorts+c.FrameTooLongs > 0
 }

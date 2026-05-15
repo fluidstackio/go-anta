@@ -91,15 +91,16 @@ type testView struct {
 // detailBlock is one rendered section under a test's Details. Kind
 // selects the template path; only the matching fields are populated.
 type detailBlock struct {
-	Kind   string // "fans" | "psus" | "temps" | "optics" | "summary" | "issues" | "json"
-	Title  string
-	Fans   []fanRow
-	PSUs   []psuRow
-	Temps  []tempRow
-	Optics []opticRow
-	KV     []kvRow
-	Items  []string // for "issues"
-	JSON   string   // for "json"
+	Kind        string // "fans" | "psus" | "temps" | "optics" | "ifaceErrors" | "summary" | "issues" | "json"
+	Title       string
+	Fans        []fanRow
+	PSUs        []psuRow
+	Temps       []tempRow
+	Optics      []opticRow
+	IfaceErrors []ifaceErrorRow
+	KV          []kvRow
+	Items       []string // for "issues"
+	JSON        string   // for "json"
 }
 
 type fanRow struct {
@@ -150,6 +151,18 @@ type opticRow struct {
 	TxBias      string
 	Status      string
 	StatusClass string
+}
+
+type ifaceErrorRow struct {
+	Interface       string
+	InErrors        int
+	OutErrors       int
+	FcsErrors       int
+	AlignmentErrors int
+	SymbolErrors    int
+	FrameTooShorts  int
+	FrameTooLongs   int
+	Total           int
 }
 
 type kvRow struct {
@@ -324,6 +337,10 @@ func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
 		blocks = append(blocks, opticsBlock(optics))
 		consumed["transceivers"] = true
 	}
+	if errs, ok := m["interface_errors"].([]any); ok {
+		blocks = append(blocks, ifaceErrorsBlock(errs))
+		consumed["interface_errors"] = true
+	}
 	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
 		var list []string
 		for _, item := range issues {
@@ -484,6 +501,36 @@ func tempsBlock(items []any) detailBlock {
 			}
 		}
 		out.Temps = append(out.Temps, row)
+	}
+	return out
+}
+
+func ifaceErrorsBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "ifaceErrors", Title: "Interface error counters"}
+	intField := func(m map[string]any, key string) int {
+		if v, ok := m[key].(float64); ok {
+			return int(v)
+		}
+		return 0
+	}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := ifaceErrorRow{
+			Interface:       strVal(m, "interface"),
+			InErrors:        intField(m, "in_errors"),
+			OutErrors:       intField(m, "out_errors"),
+			FcsErrors:       intField(m, "fcs_errors"),
+			AlignmentErrors: intField(m, "alignment_errors"),
+			SymbolErrors:    intField(m, "symbol_errors"),
+			FrameTooShorts:  intField(m, "frame_too_shorts"),
+			FrameTooLongs:   intField(m, "frame_too_longs"),
+		}
+		row.Total = row.InErrors + row.OutErrors + row.FcsErrors + row.AlignmentErrors +
+			row.SymbolErrors + row.FrameTooShorts + row.FrameTooLongs
+		out.IfaceErrors = append(out.IfaceErrors, row)
 	}
 	return out
 }
