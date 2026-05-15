@@ -268,6 +268,20 @@ func (d *EOSDevice) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// Ping and Traceroute are intentionally not implemented over eAPI. The
+// only routes available are (a) running the CLI `ping`/`traceroute`
+// commands via runCmds and parsing the free-form text, which is brittle
+// and silently desyncs across EOS releases, or (b) gNOI, which requires
+// gRPC. Users who need structured ping/traceroute should configure the
+// device with transport: gnmi.
+func (d *EOSDevice) Ping(ctx context.Context, opts PingOpts) (*PingResult, error) {
+	return nil, ErrDiagUnsupported
+}
+
+func (d *EOSDevice) Traceroute(ctx context.Context, opts TracerouteOpts) (*TracerouteResult, error) {
+	return nil, ErrDiagUnsupported
+}
+
 func (d *EOSDevice) executeCommand(ctx context.Context, cmd Command) (*CommandResult, error) {
 	cmdStr := d.expandTemplate(cmd)
 	logger.Debugf("Executing command on %s: %s", d.Config.Name, cmdStr)

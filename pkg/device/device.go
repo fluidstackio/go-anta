@@ -20,6 +20,15 @@ type Device interface {
 	IsEstablished() bool
 	HardwareModel() string
 	Refresh(ctx context.Context) error
+
+	// Ping runs an IPv4/IPv6 ICMP echo via the gNOI System.Ping RPC.
+	// Returns ErrDiagUnsupported on transports that cannot serve it.
+	Ping(ctx context.Context, opts PingOpts) (*PingResult, error)
+
+	// Traceroute walks the path to opts.Destination via the gNOI
+	// System.Traceroute RPC. Returns ErrDiagUnsupported on transports
+	// that cannot serve it.
+	Traceroute(ctx context.Context, opts TracerouteOpts) (*TracerouteResult, error)
 }
 
 type Command struct {
