@@ -91,14 +91,15 @@ type testView struct {
 // detailBlock is one rendered section under a test's Details. Kind
 // selects the template path; only the matching fields are populated.
 type detailBlock struct {
-	Kind  string // "fans" | "psus" | "temps" | "summary" | "issues" | "json"
-	Title string
-	Fans  []fanRow
-	PSUs  []psuRow
-	Temps []tempRow
-	KV    []kvRow
-	Items []string // for "issues"
-	JSON  string   // for "json"
+	Kind   string // "fans" | "psus" | "temps" | "optics" | "summary" | "issues" | "json"
+	Title  string
+	Fans   []fanRow
+	PSUs   []psuRow
+	Temps  []tempRow
+	Optics []opticRow
+	KV     []kvRow
+	Items  []string // for "issues"
+	JSON   string   // for "json"
 }
 
 type fanRow struct {
@@ -134,6 +135,21 @@ type psuRow struct {
 	OutputPower string // formatted "287 W"
 	Capacity    string // formatted "3000 W"
 	LoadPct     string // formatted "9%" (output / capacity)
+}
+
+type opticRow struct {
+	Port        string
+	Media       string
+	VendorSN    string
+	VendorName  string
+	Channel     string
+	Temperature string // "29.3 °C"
+	Voltage     string // "3.34 V"
+	RxPower     string // "-10.7 dBm"
+	TxPower     string
+	TxBias      string
+	Status      string
+	StatusClass string
 }
 
 type kvRow struct {
@@ -304,6 +320,10 @@ func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
 		blocks = append(blocks, tempsBlock(temps))
 		consumed["temperatures"] = true
 	}
+	if optics, ok := m["transceivers"].([]any); ok {
+		blocks = append(blocks, opticsBlock(optics))
+		consumed["transceivers"] = true
+	}
 	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
 		var list []string
 		for _, item := range issues {
@@ -464,6 +484,54 @@ func tempsBlock(items []any) detailBlock {
 			}
 		}
 		out.Temps = append(out.Temps, row)
+	}
+	return out
+}
+
+func opticsBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "optics", Title: "Transceivers"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := opticRow{
+			Port:       strVal(m, "port"),
+			Media:      strVal(m, "media_type"),
+			VendorSN:   strVal(m, "vendor_sn"),
+			VendorName: strVal(m, "vendor_name"),
+			Channel:    strVal(m, "channel"),
+		}
+		if v, ok := m["temperature_c"].(float64); ok && v != 0 {
+			row.Temperature = fmt.Sprintf("%.1f °C", v)
+		}
+		if v, ok := m["voltage_v"].(float64); ok && v != 0 {
+			row.Voltage = fmt.Sprintf("%.2f V", v)
+		}
+		if v, ok := m["rx_power_dbm"].(float64); ok && v != 0 {
+			row.RxPower = fmt.Sprintf("%.2f dBm", v)
+		}
+		if v, ok := m["tx_power_dbm"].(float64); ok && v != 0 {
+			row.TxPower = fmt.Sprintf("%.2f dBm", v)
+		}
+		if v, ok := m["tx_bias_ma"].(float64); ok && v != 0 {
+			row.TxBias = fmt.Sprintf("%.1f mA", v)
+		}
+		row.Status = strVal(m, "status")
+		switch row.Status {
+		case "alarm":
+			row.StatusClass = "failure"
+		case "warning":
+			row.StatusClass = "error"
+		case "", "ok":
+			row.StatusClass = "success"
+			if row.Status == "" {
+				row.Status = "ok"
+			}
+		default:
+			row.StatusClass = ""
+		}
+		out.Optics = append(out.Optics, row)
 	}
 	return out
 }

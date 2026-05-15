@@ -304,6 +304,7 @@
   .icon.fan        { color: #66a3ff; }
   .icon.psu        { color: #f0b352; }
   .icon.temp       { color: #e07b7b; }
+  .icon.optic      { color: #a3e635; }
   .bar {
     display: inline-block;
     width: 70px;
@@ -467,6 +468,8 @@
                 {{- template "psusTable" . }}
               {{- else if eq .Kind "temps" }}
                 {{- template "tempsTable" . }}
+              {{- else if eq .Kind "optics" }}
+                {{- template "opticsTable" . }}
               {{- else if eq .Kind "summary" }}
                 {{- template "summaryGrid" . }}
               {{- else if eq .Kind "issues" }}
@@ -504,6 +507,8 @@
 {{ define "psuIcon" }}<span class="icon psu" aria-label="power supply"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z"/></svg></span>{{ end }}
 
 {{ define "tempIcon" }}<span class="icon temp" aria-label="temperature"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 0-3 3v9a5 5 0 1 0 6 0V5a3 3 0 0 0-3-3zm0 17a3 3 0 0 1-1-5.83V5a1 1 0 0 1 2 0v8.17A3 3 0 0 1 12 19z"/></svg></span>{{ end }}
+
+{{ define "opticIcon" }}<span class="icon optic" aria-label="transceiver"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="7" width="20" height="10" rx="2"/><circle cx="7" cy="12" r="1.8" fill="var(--panel-2)"/><circle cx="13" cy="12" r="1.8" fill="var(--panel-2)"/></svg></span>{{ end }}
 
 {{ define "fansTable" }}
 <table class="detail">
@@ -582,6 +587,43 @@
       <td class="num">{{ if .OverheatC }}{{ .OverheatC }}{{ else }}—{{ end }}</td>
       <td class="num">{{ if .CriticalC }}{{ .CriticalC }}{{ else }}—{{ end }}</td>
       <td class="num">{{ if .HeadroomC }}{{ .HeadroomC }}{{ else }}—{{ end }}</td>
+      <td><span class="pill {{ .StatusClass }}">{{ .Status }}</span></td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "opticsTable" }}
+<table class="detail">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Port</th>
+      <th>Media</th>
+      <th>Vendor SN</th>
+      <th>Ch</th>
+      <th>Temp</th>
+      <th>Voltage</th>
+      <th>Rx</th>
+      <th>Tx</th>
+      <th>Bias</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{- range .Optics }}
+    <tr>
+      <td>{{ template "opticIcon" }}</td>
+      <td class="mono">{{ .Port }}</td>
+      <td class="mono">{{ if .Media }}{{ .Media }}{{ else }}—{{ end }}</td>
+      <td class="mono">{{ if .VendorSN }}{{ .VendorSN }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .Channel }}{{ .Channel }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .Temperature }}{{ .Temperature }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .Voltage }}{{ .Voltage }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .RxPower }}{{ .RxPower }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .TxPower }}{{ .TxPower }}{{ else }}—{{ end }}</td>
+      <td class="num">{{ if .TxBias }}{{ .TxBias }}{{ else }}—{{ end }}</td>
       <td><span class="pill {{ .StatusClass }}">{{ .Status }}</span></td>
     </tr>
     {{- end }}

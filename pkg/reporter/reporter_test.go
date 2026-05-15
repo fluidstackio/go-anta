@@ -277,6 +277,67 @@ func TestRender_TempsTable(t *testing.T) {
 	}
 }
 
+func TestRender_OpticsTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyTransceivers",
+				DeviceName: "tor1",
+				Status:     test.TestSuccess,
+				Details: map[string]any{
+					"populated_count": 2,
+					"empty_count":     30,
+					"transceivers": []any{
+						map[string]any{
+							"port":          "Ethernet1/1",
+							"media_type":    "100GBASE-PSM4",
+							"vendor_sn":     "XMN223000569",
+							"channel":       "1",
+							"temperature_c": float64(29.27),
+							"voltage_v":     float64(3.34),
+							"rx_power_dbm":  float64(-10.69),
+							"tx_power_dbm":  float64(0.22),
+							"tx_bias_ma":    float64(31.27),
+							"status":        "ok",
+						},
+						map[string]any{
+							"port":         "Ethernet2/1",
+							"media_type":   "100GBASE-LR4",
+							"vendor_sn":    "AAA111",
+							"rx_power_dbm": float64(-25),
+							"status":       "alarm",
+						},
+					},
+				},
+			},
+		},
+	}
+	body, _ := RenderToBytes(r)
+	s := string(body)
+	for _, want := range []string{
+		`class="icon optic"`,
+		"100GBASE-PSM4",
+		"XMN223000569",
+		"29.3 °C",
+		"3.34 V",
+		"-10.69 dBm",
+		"0.22 dBm",
+		"31.3 mA",
+		`class="pill success"`, // ok port
+		`class="pill failure"`, // alarm port
+		"<dt>Populated count</dt>",
+		"<dd>2</dd>",
+		"<dt>Empty count</dt>",
+		"<dd>30</dd>",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+}
+
 func TestRender_IssuesList(t *testing.T) {
 	r := &Report{
 		Started: time.Now(),
