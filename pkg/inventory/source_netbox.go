@@ -125,9 +125,13 @@ func NewNetboxSource(config NetboxConfig, query NetboxQuery) *NetboxSource {
 }
 
 // LoadFromNetbox is a back-compat wrapper around NetboxSource. New
-// callers should construct a NetboxSource and call Load directly so
-// they can pass a context.
-func LoadFromNetbox(config NetboxConfig, query NetboxQuery, credentials map[string]interface{}) (*Inventory, error) {
+// callers should construct a NetboxSource and call Load directly.
+//
+// R6: signature changed to take ctx as the first argument. Prior
+// versions silently used context.Background(), so SIGINT and other
+// cancellation paths could not interrupt a long Netbox fetch. External
+// callers must add ctx; the migration is a one-line change.
+func LoadFromNetbox(ctx context.Context, config NetboxConfig, query NetboxQuery, credentials map[string]interface{}) (*Inventory, error) {
 	defaults := DeviceDefaults{}
 	if v, ok := credentials["username"].(string); ok {
 		defaults.Username = v
@@ -150,7 +154,7 @@ func LoadFromNetbox(config NetboxConfig, query NetboxQuery, credentials map[stri
 		defaults.Port = v
 	}
 	src := &NetboxSource{config: config, query: query, defaults: defaults}
-	inv, err := src.Load(context.Background())
+	inv, err := src.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +178,10 @@ type NetboxInventoryConfig struct {
 // inventory YAML (with a top-level netbox: block) and uses NetboxSource
 // under the hood. NETBOX_URL / NETBOX_TOKEN env vars override the
 // values in the file if set (matching legacy behavior).
-func LoadNetboxInventory(path string) (*Inventory, error) {
+//
+// R6: signature changed to take ctx as the first argument; older
+// versions used context.Background() and ignored cancellation.
+func LoadNetboxInventory(ctx context.Context, path string) (*Inventory, error) {
 	src, err := LoadSource(path)
 	if err != nil {
 		return nil, err
@@ -205,7 +212,7 @@ func LoadNetboxInventory(path string) (*Inventory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("inventory %s: parse credentials: %w", path, err)
 	}
-	return nb.Load(context.Background())
+	return nb.Load(ctx)
 }
 
 // loadNetboxCredentialsFromYAML parses the top-level credentials block from a
