@@ -93,24 +93,30 @@ bugs beyond R3's recipe — six STP tests were reading non-existent fields
 got real rewrites against EOS's actual `spanningTreeInstances` map. EVPN
 Type-5 deliberately deferred until R2 is decided.
 
-#### R4. `ValidateInput` is mostly dead code
-Across all `tests/`, `ValidateInput` either returns nil (stub) or validates the post-constructor struct rather than the raw `input` map. A user typo like `peer_addres:` produces an empty parsed value and either a vacuous PASS or "no peers found" — the real cause (key typo) is never surfaced.
+#### ~~R4. `ValidateInput` is mostly dead code~~ — partly shipped in `fix/r4-input-validation`
 
-Fix is best done as a convention change: make `NewVerify*` constructors return an error when an `inputs[key]` is present but the type assertion fails, e.g.
+Two parts:
 
-```go
-if raw, ok := inputs["max_drops"]; ok {
-    switch v := raw.(type) {
-    case float64: t.MaxDrops = int64(v)
-    case int:     t.MaxDrops = int64(v)
-    default:      return nil, fmt.Errorf("max_drops: expected number, got %T", raw)
-    }
-}
-```
+1. **Typo detection (shipped, all tests covered)** — `pkg/test.ValidateInputKeys`
+   now runs inside `Registry.GetTestWithInputs` after the factory
+   returns. It reflects on the test struct's `yaml:""` tags (skipping
+   embedded `BaseTest`'s metadata fields) and rejects any top-level
+   input key not in that set. Tests with non-yaml-tagged input fields
+   can implement `CustomInputKeys` to opt-in extra keys. Tests that
+   declare no input tags at all are skipped — the framework has
+   nothing to compare against and they're read ad-hoc. Result: typos
+   like `peer_addres:` now fail at construction time with
+   `connectivity/VerifyReachability: unknown input key(s) [peer_addres]; valid keys are: [hosts repeat size]`.
 
-Then `ValidateInput` can be deprecated or reduced to range-checks only.
-
-This is dozens of edits — consider tackling per package.
+2. **Type-mismatch detection at the field level (helpers shipped, retrofit pending)** —
+   `pkg/test.GetInt/GetString/GetBool/GetStringSlice` are available
+   for use in new and edited constructors. They return typed errors
+   for present-but-wrong-type values (`max_drops: "five"` →
+   `max_drops: expected number, got string`). Existing 125
+   constructors still read `inputs[key]` ad-hoc — they continue to
+   work, but they silently coerce-to-default on type mismatch. Whoever
+   edits a NewVerify\* next should migrate it to the helpers; new
+   tests should use them from the start.
 
 #### R5. Three commands copy-paste Netbox query parsing; `check.go` is silently missing keys
 `internal/cli/commands/nrfu.go:246-374`, `check.go:129-221`, `inventory.go:241-350` have the same ~110-line block. `check.go` is silently missing `site_id`, `role_id`, `device_type_id`, etc. that nrfu/inventory support, so `--netbox-query site_id=14` works for nrfu/inventory but drops silently in `check`.

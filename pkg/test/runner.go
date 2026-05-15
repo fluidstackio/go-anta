@@ -132,12 +132,12 @@ func (r *Runner) runTest(ctx context.Context, testDef TestDefinition, dev device
 
 	testImpl, err := r.registry.GetTestWithInputs(testDef.Module, testDef.Name, testDef.Inputs)
 	if err != nil {
-		logger.Errorf("Test %s not found: %v", testDef.Name, err)
+		logger.Errorf("Failed to construct test %s: %v", testDef.Name, err)
 		return TestResult{
 			TestName:   testDef.Name,
 			DeviceName: dev.Name(),
 			Status:     TestError,
-			Message:    fmt.Sprintf("Test not found: %v", err),
+			Message:    fmt.Sprintf("Failed to construct test: %v", err),
 			Duration:   time.Since(start),
 			Timestamp:  time.Now(),
 			Categories: testDef.Categories,
