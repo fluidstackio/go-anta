@@ -413,6 +413,54 @@ func (t *VerifyBGPUnnumbered) ValidateInput(input any) error {
 
 // ==================== Common BGP Structures for Extended Tests ====================
 
+// bgpRibdAFKey returns the camelCase address-family key used in
+// `show bgp summary ribd` JSON output. EOS emits keys like "ipv4Unicast",
+// "ipv6Unicast", "evpn", "vpnIpv4", "ipv4MplsLabels"; YAML inputs use the
+// hyphenated CLI form ("ipv4"/"unicast", "vpn-ipv4", "ipv4"/"mpls-labels").
+func bgpRibdAFKey(afi, safi string) string {
+	afi = strings.ToLower(strings.TrimSpace(afi))
+	safi = strings.ToLower(strings.TrimSpace(safi))
+	// EVPN has no SAFI in EOS RIBD output keys.
+	if afi == "evpn" {
+		return "evpn"
+	}
+	if safi == "" {
+		safi = "unicast"
+	}
+	parts := strings.Split(afi+"-"+safi, "-")
+	var b strings.Builder
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		if i == 0 {
+			b.WriteString(p)
+		} else {
+			b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+		}
+	}
+	return b.String()
+}
+
+// bgpSummaryCommand returns the EOS `show bgp ... summary` invocation that
+// scopes the response to a single address family. `show bgp summary` without
+// an AFI/SAFI returns peers from every address family at once, so callers
+// that need to count or check peers per-AF must use the scoped form to avoid
+// double-counting peers configured in multiple families.
+func bgpSummaryCommand(afi, safi string) string {
+	afi = strings.ToLower(strings.TrimSpace(afi))
+	safi = strings.ToLower(strings.TrimSpace(safi))
+	switch afi {
+	case "evpn", "rt-membership", "link-state", "vpn-ipv4", "vpn-ipv6":
+		return "show bgp " + afi + " summary"
+	default:
+		if safi == "" {
+			safi = "unicast"
+		}
+		return fmt.Sprintf("show bgp %s %s summary", afi, safi)
+	}
+}
+
 // BgpAddressFamily represents AFI/SAFI configuration
 type BgpAddressFamily struct {
 	AFI            string   `yaml:"afi" json:"afi"`
@@ -421,6 +469,48 @@ type BgpAddressFamily struct {
 	NumPeers       int      `yaml:"num_peers,omitempty" json:"num_peers,omitempty"`
 	CheckPeerState bool     `yaml:"check_peer_state,omitempty" json:"check_peer_state,omitempty"`
 	Peers          []string `yaml:"peers,omitempty" json:"peers,omitempty"`
+}
+
+// BgpRoute names a prefix and the expected number of paths/next-hops the
+// caller wants verified. Used by VerifyBGPRoutePaths and VerifyBGPRouteECMP.
+type BgpRoute struct {
+	Prefix        string `yaml:"prefix" json:"prefix"`
+	ExpectedPaths int    `yaml:"expected_paths,omitempty" json:"expected_paths,omitempty"`
+	VRF           string `yaml:"vrf,omitempty" json:"vrf,omitempty"`
+}
+
+// parseBgpRoutes reads the `routes:` list from a YAML inputs map into
+// []BgpRoute. Each entry must be a map with at least `prefix`; `vrf`
+// defaults to "default" and `expected_paths` is optional.
+func parseBgpRoutes(inputs map[string]any) ([]BgpRoute, error) {
+	if inputs == nil {
+		return nil, nil
+	}
+	raw, ok := inputs["routes"].([]any)
+	if !ok {
+		return nil, nil
+	}
+	var routes []BgpRoute
+	for i, r := range raw {
+		m, ok := r.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("routes[%d]: expected map, got %T", i, r)
+		}
+		route := BgpRoute{VRF: "default"}
+		if s, ok := m["prefix"].(string); ok {
+			route.Prefix = s
+		}
+		if v, ok := m["expected_paths"].(float64); ok {
+			route.ExpectedPaths = int(v)
+		} else if v, ok := m["expected_paths"].(int); ok {
+			route.ExpectedPaths = v
+		}
+		if s, ok := m["vrf"].(string); ok && s != "" {
+			route.VRF = s
+		}
+		routes = append(routes, route)
+	}
+	return routes, nil
 }
 
 // BgpPeerExtended represents extended BGP peer configuration
@@ -438,6 +528,8 @@ type BgpPeerExtended struct {
 	WarningLimit          int                    `yaml:"warning_limit,omitempty" json:"warning_limit,omitempty"`
 	PeerGroup             string                 `yaml:"peer_group,omitempty" json:"peer_group,omitempty"`
 	TTL                   int                    `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+	ExpectedTTL           int                    `yaml:"expected_ttl,omitempty" json:"expected_ttl,omitempty"`
+	MaxHops               int                    `yaml:"max_hops,omitempty" json:"max_hops,omitempty"`
 	DropStats             map[string]int         `yaml:"drop_stats,omitempty" json:"drop_stats,omitempty"`
 	UpdateErrors          map[string]any `yaml:"update_errors,omitempty" json:"update_errors,omitempty"`
 	InboundRouteMap       string                 `yaml:"inbound_route_map,omitempty" json:"inbound_route_map,omitempty"`
@@ -524,39 +616,39 @@ func (t *VerifyBGPPeerCount) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show bgp summary",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP summary: %v", err)
-		return result, nil
-	}
-
-	bgpData, err := test.AsMap(cmdResult.Output)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Unexpected BGP summary output: %v", err)
-		return result, nil
-	}
-
 	issues := []string{}
-
-	vrfs, ok := bgpData["vrfs"].(map[string]any)
-	if !ok {
-		result.Status = test.TestError
-		result.Message = "BGP summary output missing 'vrfs' field"
-		return result, nil
-	}
 
 	for _, af := range t.AddressFamilies {
 		vrf := af.VRF
 		if vrf == "" {
 			vrf = "default"
+		}
+
+		cmd := device.Command{
+			Template: bgpSummaryCommand(af.AFI, af.SAFI),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP summary for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		bgpData, err := test.AsMap(cmdResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected BGP summary output for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		vrfs, ok := bgpData["vrfs"].(map[string]any)
+		if !ok {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("BGP summary output for AFI %s SAFI %s missing 'vrfs' field", af.AFI, af.SAFI)
+			return result, nil
 		}
 
 		vrfData, exists := vrfs[vrf]
@@ -701,74 +793,84 @@ func (t *VerifyBGPPeersHealth) Execute(ctx context.Context, dev device.Device) (
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show bgp summary",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP summary: %v", err)
-		return result, nil
-	}
-
 	issues := []string{}
 
-	if bgpData, ok := cmdResult.Output.(map[string]any); ok {
-		if vrfs, ok := bgpData["vrfs"].(map[string]any); ok {
-			for _, af := range t.AddressFamilies {
-				vrf := af.VRF
-				if vrf == "" {
-					vrf = "default"
+	for _, af := range t.AddressFamilies {
+		vrf := af.VRF
+		if vrf == "" {
+			vrf = "default"
+		}
+
+		cmd := device.Command{
+			Template: bgpSummaryCommand(af.AFI, af.SAFI),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP summary for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		bgpData, err := test.AsMap(cmdResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected BGP summary output for AFI %s SAFI %s: %v", af.AFI, af.SAFI, err)
+			return result, nil
+		}
+
+		vrfs, ok := bgpData["vrfs"].(map[string]any)
+		if !ok {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("BGP summary output for AFI %s SAFI %s missing 'vrfs' field", af.AFI, af.SAFI)
+			return result, nil
+		}
+
+		vrfData, exists := vrfs[vrf]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+		vrfInfo, ok := vrfData.(map[string]any)
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VRF %s data malformed for AFI %s SAFI %s", vrf, af.AFI, af.SAFI))
+			continue
+		}
+
+		peers, _ := vrfInfo["peers"].(map[string]any)
+		for peerAddr, peerData := range peers {
+			peerInfo, ok := peerData.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if state, ok := peerInfo["peerState"].(string); ok {
+				if !strings.EqualFold(state, "Established") {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s is %s, not Established",
+						peerAddr, af.AFI, af.SAFI, vrf, state))
+					continue
 				}
+			}
 
-				if vrfData, exists := vrfs[vrf]; exists {
-					if vrfInfo, ok := vrfData.(map[string]any); ok {
-						if peers, ok := vrfInfo["peers"].(map[string]any); ok {
-							for peerAddr, peerData := range peers {
-								if peerInfo, ok := peerData.(map[string]any); ok {
-									// Check peer state
-									if state, ok := peerInfo["peerState"].(string); ok {
-										if !strings.EqualFold(state, "Established") {
-											issues = append(issues, fmt.Sprintf("Peer %s in VRF %s is %s, not Established",
-												peerAddr, vrf, state))
-											continue
-										}
-									}
-
-									// Check established time if specified
-									if t.MinimumEstablishedTime > 0 {
-										if uptime, ok := peerInfo["upDownTime"].(float64); ok {
-											if uptime < float64(t.MinimumEstablishedTime) {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s established for only %.0f seconds (minimum: %d)",
-													peerAddr, vrf, uptime, t.MinimumEstablishedTime))
-											}
-										}
-									}
-
-									// Check TCP queues if enabled
-									if t.CheckTCPQueues {
-										if inQueue, ok := peerInfo["inMsgQueue"].(float64); ok {
-											if inQueue > 0 {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s has %d messages in input queue",
-													peerAddr, vrf, int(inQueue)))
-											}
-										}
-										if outQueue, ok := peerInfo["outMsgQueue"].(float64); ok {
-											if outQueue > 0 {
-												issues = append(issues, fmt.Sprintf("Peer %s in VRF %s has %d messages in output queue",
-													peerAddr, vrf, int(outQueue)))
-											}
-										}
-									}
-								}
-							}
-						}
+			if t.MinimumEstablishedTime > 0 {
+				if uptime, ok := peerInfo["upDownTime"].(float64); ok {
+					if uptime < float64(t.MinimumEstablishedTime) {
+						issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s established for only %.0f seconds (minimum: %d)",
+							peerAddr, af.AFI, af.SAFI, vrf, uptime, t.MinimumEstablishedTime))
 					}
-				} else {
-					issues = append(issues, fmt.Sprintf("VRF %s not found for AFI %s", vrf, af.AFI))
+				}
+			}
+
+			if t.CheckTCPQueues {
+				if inQueue, ok := peerInfo["inMsgQueue"].(float64); ok && inQueue > 0 {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s has %d messages in input queue",
+						peerAddr, af.AFI, af.SAFI, vrf, int(inQueue)))
+				}
+				if outQueue, ok := peerInfo["outMsgQueue"].(float64); ok && outQueue > 0 {
+					issues = append(issues, fmt.Sprintf("Peer %s in AFI %s SAFI %s VRF %s has %d messages in output queue",
+						peerAddr, af.AFI, af.SAFI, vrf, int(outQueue)))
 				}
 			}
 		}
@@ -3198,7 +3300,7 @@ var response struct {
 			continue
 		}
 
-		afKey := fmt.Sprintf("%s-%s", addressFamily.AFI, addressFamily.SAFI)
+		afKey := bgpRibdAFKey(addressFamily.AFI, addressFamily.SAFI)
 		afData, exists := vrfData.AddressFamilies[afKey]
 		if !exists {
 			issues = append(issues, fmt.Sprintf("Address family %s/%s not found in VRF %s",
@@ -3386,7 +3488,7 @@ func (t *VerifyBGPNlriAcceptance) ValidateInput(input any) error {
 //           expected_paths: 3
 type VerifyBGPRoutePaths struct {
 	test.BaseTest
-	Routes []string `yaml:"routes" json:"routes"`
+	Routes []BgpRoute `yaml:"routes" json:"routes"`
 }
 
 func NewVerifyBGPRoutePaths(inputs map[string]any) (test.Test, error) {
@@ -3398,15 +3500,11 @@ func NewVerifyBGPRoutePaths(inputs map[string]any) (test.Test, error) {
 		},
 	}
 
-	if inputs != nil {
-		if routes, ok := inputs["routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.Routes = append(t.Routes, routeStr)
-				}
-			}
-		}
+	routes, err := parseBgpRoutes(inputs)
+	if err != nil {
+		return nil, err
 	}
+	t.Routes = routes
 
 	return t, nil
 }
@@ -3420,7 +3518,7 @@ func (t *VerifyBGPRoutePaths) Execute(ctx context.Context, dev device.Device) (*
 	}
 
 	cmd := device.Command{
-		Template: "show ip route bgp",
+		Template: "show ip bgp vrf all",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3428,24 +3526,43 @@ func (t *VerifyBGPRoutePaths) Execute(ctx context.Context, dev device.Device) (*
 	cmdResult, err := dev.Execute(ctx, cmd)
 	if err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to get BGP RIB: %v", err)
 		return result, nil
 	}
 
-var response struct {
-		Routes map[string]any `json:"routes"`
+	var response struct {
+		VRFs map[string]struct {
+			BgpRouteEntries map[string]struct {
+				BgpRoutePaths []any `json:"bgpRoutePaths"`
+			} `json:"bgpRouteEntries"`
+		} `json:"vrfs"`
 	}
 
 	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP routes output: %v", err)
+		result.Message = fmt.Sprintf("Failed to parse BGP RIB output: %v", err)
 		return result, nil
 	}
 
 	issues := []string{}
 	for _, route := range t.Routes {
-		if _, exists := response.Routes[route]; !exists {
-			issues = append(issues, fmt.Sprintf("BGP route %s not found", route))
+		vrfData, exists := response.VRFs[route.VRF]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not present for prefix %s", route.VRF, route.Prefix))
+			continue
+		}
+		entry, exists := vrfData.BgpRouteEntries[route.Prefix]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("BGP route %s not found in VRF %s", route.Prefix, route.VRF))
+			continue
+		}
+		got := len(entry.BgpRoutePaths)
+		switch {
+		case route.ExpectedPaths > 0 && got != route.ExpectedPaths:
+			issues = append(issues, fmt.Sprintf("BGP route %s in VRF %s: expected %d paths, got %d",
+				route.Prefix, route.VRF, route.ExpectedPaths, got))
+		case route.ExpectedPaths == 0 && got == 0:
+			issues = append(issues, fmt.Sprintf("BGP route %s in VRF %s has no paths", route.Prefix, route.VRF))
 		}
 	}
 
@@ -3459,7 +3576,17 @@ var response struct {
 	return result, nil
 }
 
-func (t *VerifyBGPRoutePaths) ValidateInput(input any) error { return nil }
+func (t *VerifyBGPRoutePaths) ValidateInput(input any) error {
+	if len(t.Routes) == 0 {
+		return fmt.Errorf("at least one route must be specified")
+	}
+	for i, r := range t.Routes {
+		if r.Prefix == "" {
+			return fmt.Errorf("routes[%d]: prefix is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPRouteECMP verifies that BGP routes have proper ECMP (Equal Cost Multi-Path) behavior.
 //
@@ -3484,7 +3611,7 @@ func (t *VerifyBGPRoutePaths) ValidateInput(input any) error { return nil }
 //           expected_paths: 2
 type VerifyBGPRouteECMP struct {
 	test.BaseTest
-	Routes []string `yaml:"routes" json:"routes"`
+	Routes []BgpRoute `yaml:"routes" json:"routes"`
 }
 
 func NewVerifyBGPRouteECMP(inputs map[string]any) (test.Test, error) {
@@ -3496,15 +3623,11 @@ func NewVerifyBGPRouteECMP(inputs map[string]any) (test.Test, error) {
 		},
 	}
 
-	if inputs != nil {
-		if routes, ok := inputs["routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.Routes = append(t.Routes, routeStr)
-				}
-			}
-		}
+	routes, err := parseBgpRoutes(inputs)
+	if err != nil {
+		return nil, err
 	}
+	t.Routes = routes
 
 	return t, nil
 }
@@ -3517,40 +3640,66 @@ func (t *VerifyBGPRouteECMP) Execute(ctx context.Context, dev device.Device) (*t
 		Categories: t.Categories(),
 	}
 
-	cmd := device.Command{
-		Template: "show ip route bgp detail",
-		Format:   "json",
-		UseCache: false,
-	}
-
-	cmdResult, err := dev.Execute(ctx, cmd)
-	if err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP route details: %v", err)
-		return result, nil
-	}
-
-var response struct {
-		Routes map[string]struct {
-			NextHops []any `json:"nextHops"`
-		} `json:"routes"`
-	}
-
-	if err := decodeOutput(cmdResult.Output, &response); err != nil {
-		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP route details: %v", err)
-		return result, nil
+	// Group routes by VRF so we issue one `show ip route vrf X bgp detail`
+	// per VRF rather than per route. `show ip route bgp detail vrf all` is
+	// rejected by EOS, so default VRF and named VRFs share the same form.
+	byVRF := map[string][]BgpRoute{}
+	for _, r := range t.Routes {
+		byVRF[r.VRF] = append(byVRF[r.VRF], r)
 	}
 
 	issues := []string{}
-	for _, route := range t.Routes {
-		if routeData, exists := response.Routes[route]; exists {
-			if len(routeData.NextHops) < 2 {
-				issues = append(issues, fmt.Sprintf("Route %s has only %d next hop(s), expected ECMP with multiple paths",
-					route, len(routeData.NextHops)))
+	for vrf, routes := range byVRF {
+		cmd := device.Command{
+			Template: fmt.Sprintf("show ip route vrf %s bgp detail", vrf),
+			Format:   "json",
+			UseCache: false,
+		}
+
+		cmdResult, err := dev.Execute(ctx, cmd)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to get BGP route details for VRF %s: %v", vrf, err)
+			return result, nil
+		}
+
+		var response struct {
+			VRFs map[string]struct {
+				Routes map[string]struct {
+					Vias []any `json:"vias"`
+				} `json:"routes"`
+			} `json:"vrfs"`
+		}
+
+		if err := decodeOutput(cmdResult.Output, &response); err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Failed to parse BGP route details for VRF %s: %v", vrf, err)
+			return result, nil
+		}
+
+		vrfData, exists := response.VRFs[vrf]
+		if !exists {
+			for _, route := range routes {
+				issues = append(issues, fmt.Sprintf("VRF %s not present for prefix %s", vrf, route.Prefix))
 			}
-		} else {
-			issues = append(issues, fmt.Sprintf("BGP route %s not found", route))
+			continue
+		}
+
+		for _, route := range routes {
+			entry, exists := vrfData.Routes[route.Prefix]
+			if !exists {
+				issues = append(issues, fmt.Sprintf("BGP route %s not found in VRF %s", route.Prefix, vrf))
+				continue
+			}
+			got := len(entry.Vias)
+			switch {
+			case route.ExpectedPaths > 0 && got != route.ExpectedPaths:
+				issues = append(issues, fmt.Sprintf("Route %s in VRF %s: expected %d ECMP next-hops, got %d",
+					route.Prefix, vrf, route.ExpectedPaths, got))
+			case route.ExpectedPaths == 0 && got < 2:
+				issues = append(issues, fmt.Sprintf("Route %s in VRF %s has only %d next-hop(s), expected ECMP",
+					route.Prefix, vrf, got))
+			}
 		}
 	}
 
@@ -3564,7 +3713,17 @@ var response struct {
 	return result, nil
 }
 
-func (t *VerifyBGPRouteECMP) ValidateInput(input any) error { return nil }
+func (t *VerifyBGPRouteECMP) ValidateInput(input any) error {
+	if len(t.Routes) == 0 {
+		return fmt.Errorf("at least one route must be specified")
+	}
+	for i, r := range t.Routes {
+		if r.Prefix == "" {
+			return fmt.Errorf("routes[%d]: prefix is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPRedistribution verifies that route redistribution into BGP is working correctly.
 //
@@ -3587,9 +3746,17 @@ func (t *VerifyBGPRouteECMP) ValidateInput(input any) error { return nil }
 //           vrf: "default"
 //         - source_protocol: "static"
 //           expected_count: 5
+// BgpRedistribution names a source routing protocol expected to be
+// redistributed into BGP for a given VRF.
+type BgpRedistribution struct {
+	SourceProtocol string `yaml:"source_protocol" json:"source_protocol"`
+	ExpectedCount  int    `yaml:"expected_count,omitempty" json:"expected_count,omitempty"`
+	VRF            string `yaml:"vrf,omitempty" json:"vrf,omitempty"`
+}
+
 type VerifyBGPRedistribution struct {
 	test.BaseTest
-	RedistributedRoutes []string `yaml:"redistributed_routes" json:"redistributed_routes"`
+	RedistributedRoutes []BgpRedistribution `yaml:"redistributed_routes" json:"redistributed_routes"`
 }
 
 func NewVerifyBGPRedistribution(inputs map[string]any) (test.Test, error) {
@@ -3602,11 +3769,26 @@ func NewVerifyBGPRedistribution(inputs map[string]any) (test.Test, error) {
 	}
 
 	if inputs != nil {
-		if routes, ok := inputs["redistributed_routes"].([]any); ok {
-			for _, route := range routes {
-				if routeStr, ok := route.(string); ok {
-					t.RedistributedRoutes = append(t.RedistributedRoutes, routeStr)
+		raw, ok := inputs["redistributed_routes"].([]any)
+		if ok {
+			for i, r := range raw {
+				m, ok := r.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("redistributed_routes[%d]: expected map, got %T", i, r)
 				}
+				entry := BgpRedistribution{VRF: "default"}
+				if s, ok := m["source_protocol"].(string); ok {
+					entry.SourceProtocol = s
+				}
+				if v, ok := m["expected_count"].(float64); ok {
+					entry.ExpectedCount = int(v)
+				} else if v, ok := m["expected_count"].(int); ok {
+					entry.ExpectedCount = v
+				}
+				if s, ok := m["vrf"].(string); ok && s != "" {
+					entry.VRF = s
+				}
+				t.RedistributedRoutes = append(t.RedistributedRoutes, entry)
 			}
 		}
 	}
@@ -3622,8 +3804,14 @@ func (t *VerifyBGPRedistribution) Execute(ctx context.Context, dev device.Device
 		Categories: t.Categories(),
 	}
 
+	// `show bgp instance` exposes the configured redistribution sources
+	// for every AF in every VRF — exactly what determines whether a
+	// protocol is being redistributed into BGP. The old code queried
+	// `show ip route bgp` and pattern-matched routeType against "BGP",
+	// but every entry there has routeType "eBGP"/"iBGP" so the check
+	// was vacuously false — silent PASS.
 	cmd := device.Command{
-		Template: "show ip route bgp",
+		Template: "show bgp instance",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3631,32 +3819,69 @@ func (t *VerifyBGPRedistribution) Execute(ctx context.Context, dev device.Device
 	cmdResult, err := dev.Execute(ctx, cmd)
 	if err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to get BGP redistributed routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to get BGP instance config: %v", err)
 		return result, nil
 	}
 
-var response struct {
-		Routes map[string]struct {
-			RouteType string `json:"routeType"`
-		} `json:"routes"`
+	var response struct {
+		VRFs map[string]struct {
+			AfiSafiConfig map[string]struct {
+				RedistributedRoutes []struct {
+					Proto    string `json:"proto"`
+					RouteMap string `json:"routeMap,omitempty"`
+				} `json:"redistributedRoutes"`
+			} `json:"afiSafiConfig"`
+		} `json:"vrfs"`
 	}
 
 	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
-		result.Message = fmt.Sprintf("Failed to parse BGP routes: %v", err)
+		result.Message = fmt.Sprintf("Failed to parse BGP instance output: %v", err)
 		return result, nil
 	}
 
 	issues := []string{}
-	for _, route := range t.RedistributedRoutes {
-		if routeData, exists := response.Routes[route]; exists {
-			// Check if route is redistributed (not learned from BGP peer)
-			if routeData.RouteType == "BGP" {
-				// This is a normal BGP route, not redistributed
-				issues = append(issues, fmt.Sprintf("Route %s appears to be learned via BGP, not redistributed", route))
+	for _, entry := range t.RedistributedRoutes {
+		vrfData, exists := response.VRFs[entry.VRF]
+		if !exists {
+			issues = append(issues, fmt.Sprintf("VRF %s not present in BGP instance", entry.VRF))
+			continue
+		}
+
+		// Walk every AF's redistribution list looking for a case-insensitive
+		// match. The test schema doesn't pin AF, so this is the most lenient
+		// reading — "is this protocol redistributed *somewhere* in this VRF".
+		found := false
+		for _, af := range vrfData.AfiSafiConfig {
+			for _, r := range af.RedistributedRoutes {
+				if strings.EqualFold(r.Proto, entry.SourceProtocol) {
+					found = true
+					break
+				}
 			}
-		} else {
-			issues = append(issues, fmt.Sprintf("Redistributed route %s not found in BGP table", route))
+			if found {
+				break
+			}
+		}
+		if !found {
+			issues = append(issues, fmt.Sprintf("source protocol %q not configured for redistribution in VRF %s",
+				entry.SourceProtocol, entry.VRF))
+			continue
+		}
+
+		if entry.ExpectedCount > 0 {
+			count, err := countRoutesByProto(ctx, dev, entry.SourceProtocol, entry.VRF)
+			if err != nil {
+				// Don't fail the test because the upper-bound count check
+				// couldn't run; the config check above is the primary signal.
+				issues = append(issues, fmt.Sprintf("source protocol %q in VRF %s: redistribution configured, but RIB count check skipped (%v)",
+					entry.SourceProtocol, entry.VRF, err))
+				continue
+			}
+			if count < entry.ExpectedCount {
+				issues = append(issues, fmt.Sprintf("source protocol %q in VRF %s: expected at least %d routes in RIB, found %d",
+					entry.SourceProtocol, entry.VRF, entry.ExpectedCount, count))
+			}
 		}
 	}
 
@@ -3664,13 +3889,52 @@ var response struct {
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("BGP redistribution validation failed: %s", strings.Join(issues, "; "))
 	} else {
-		result.Message = fmt.Sprintf("All BGP redistributed routes verified (%d routes)", len(t.RedistributedRoutes))
+		result.Message = fmt.Sprintf("All BGP redistribution sources verified (%d entries)", len(t.RedistributedRoutes))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyBGPRedistribution) ValidateInput(input any) error { return nil }
+// countRoutesByProto returns the number of IPv4 routes in `vrf` whose
+// source is `proto`. The expected_count check is an upper bound — a
+// protocol may have N RIB routes but only some subset gets redistributed
+// into BGP via route-maps. We use this to flag the obvious case where
+// the RIB itself doesn't have enough routes to satisfy the expectation.
+func countRoutesByProto(ctx context.Context, dev device.Device, proto, vrf string) (int, error) {
+	cmd := device.Command{
+		Template: fmt.Sprintf("show ip route vrf %s %s", vrf, strings.ToLower(proto)),
+		Format:   "json",
+		UseCache: false,
+	}
+	res, err := dev.Execute(ctx, cmd)
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		VRFs map[string]struct {
+			Routes map[string]any `json:"routes"`
+		} `json:"vrfs"`
+	}
+	if err := decodeOutput(res.Output, &resp); err != nil {
+		return 0, err
+	}
+	if v, ok := resp.VRFs[vrf]; ok {
+		return len(v.Routes), nil
+	}
+	return 0, nil
+}
+
+func (t *VerifyBGPRedistribution) ValidateInput(input any) error {
+	if len(t.RedistributedRoutes) == 0 {
+		return fmt.Errorf("at least one redistributed_routes entry must be specified")
+	}
+	for i, r := range t.RedistributedRoutes {
+		if r.SourceProtocol == "" {
+			return fmt.Errorf("redistributed_routes[%d]: source_protocol is required", i)
+		}
+	}
+	return nil
+}
 
 // VerifyBGPPeerTtlMultiHops verifies TTL security and multi-hop BGP peer configurations.
 //
@@ -3709,19 +3973,28 @@ func NewVerifyBGPPeerTtlMultiHops(inputs map[string]any) (test.Test, error) {
 	if inputs != nil {
 		if peers, ok := inputs["bgp_peers"].([]any); ok {
 			for _, p := range peers {
-				if peerMap, ok := p.(map[string]any); ok {
-					peer := BgpPeerExtended{VRF: "default"}
-					if addr, ok := peerMap["peer_address"].(string); ok {
-						peer.PeerAddress = addr
-					}
-					if vrf, ok := peerMap["vrf"].(string); ok {
-						peer.VRF = vrf
-					}
-					if ttl, ok := peerMap["ttl"].(int); ok {
-						peer.TTL = ttl
-					}
-					t.BGPPeers = append(t.BGPPeers, peer)
+				peerMap, ok := p.(map[string]any)
+				if !ok {
+					continue
 				}
+				peer := BgpPeerExtended{VRF: "default"}
+				if addr, ok := peerMap["peer_address"].(string); ok {
+					peer.PeerAddress = addr
+				}
+				if vrf, ok := peerMap["vrf"].(string); ok {
+					peer.VRF = vrf
+				}
+				if v, ok := peerMap["expected_ttl"].(float64); ok {
+					peer.ExpectedTTL = int(v)
+				} else if v, ok := peerMap["expected_ttl"].(int); ok {
+					peer.ExpectedTTL = v
+				}
+				if v, ok := peerMap["max_hops"].(float64); ok {
+					peer.MaxHops = int(v)
+				} else if v, ok := peerMap["max_hops"].(int); ok {
+					peer.MaxHops = v
+				}
+				t.BGPPeers = append(t.BGPPeers, peer)
 			}
 		}
 	}
@@ -3738,7 +4011,7 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 	}
 
 	cmd := device.Command{
-		Template: "show bgp neighbors",
+		Template: "show bgp neighbors vrf all",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -3750,11 +4023,13 @@ func (t *VerifyBGPPeerTtlMultiHops) Execute(ctx context.Context, dev device.Devi
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
-			Neighbors map[string]struct {
-				EbgpMultihop int `json:"ebgpMultihop"`
-			} `json:"neighbors"`
+			PeerList []struct {
+				PeerAddress string `json:"peerAddress"`
+				TTL         int    `json:"ttl"`
+				MaxTtlHops  int    `json:"maxTtlHops"`
+			} `json:"peerList"`
 		} `json:"vrfs"`
 	}
 
@@ -3774,22 +4049,33 @@ var response struct {
 
 		vrfData, exists := response.VRFs[vrf]
 		if !exists {
-			issues = append(issues, fmt.Sprintf("VRF %s not found", vrf))
+			issues = append(issues, fmt.Sprintf("VRF %s not found for peer %s", vrf, peer.PeerAddress))
 			continue
 		}
 
-		neighbor, exists := vrfData.Neighbors[peer.PeerAddress]
-		if !exists {
+		var match *struct {
+			PeerAddress string `json:"peerAddress"`
+			TTL         int    `json:"ttl"`
+			MaxTtlHops  int    `json:"maxTtlHops"`
+		}
+		for i := range vrfData.PeerList {
+			if vrfData.PeerList[i].PeerAddress == peer.PeerAddress {
+				match = &vrfData.PeerList[i]
+				break
+			}
+		}
+		if match == nil {
 			issues = append(issues, fmt.Sprintf("BGP peer %s not found in VRF %s", peer.PeerAddress, vrf))
 			continue
 		}
 
-		// Check TTL multihop if specified
-		if peer.TTL > 0 {
-			if neighbor.EbgpMultihop != peer.TTL {
-				issues = append(issues, fmt.Sprintf("Peer %s TTL multihop mismatch: expected %d, got %d",
-					peer.PeerAddress, peer.TTL, neighbor.EbgpMultihop))
-			}
+		if peer.ExpectedTTL > 0 && match.TTL != peer.ExpectedTTL {
+			issues = append(issues, fmt.Sprintf("Peer %s in VRF %s: expected TTL %d, got %d",
+				peer.PeerAddress, vrf, peer.ExpectedTTL, match.TTL))
+		}
+		if peer.MaxHops > 0 && match.MaxTtlHops != peer.MaxHops {
+			issues = append(issues, fmt.Sprintf("Peer %s in VRF %s: expected max_hops %d, got %d",
+				peer.PeerAddress, vrf, peer.MaxHops, match.MaxTtlHops))
 		}
 	}
 
@@ -3804,5 +4090,16 @@ var response struct {
 }
 
 func (t *VerifyBGPPeerTtlMultiHops) ValidateInput(input any) error {
+	if len(t.BGPPeers) == 0 {
+		return fmt.Errorf("at least one BGP peer must be specified")
+	}
+	for i, peer := range t.BGPPeers {
+		if peer.PeerAddress == "" {
+			return fmt.Errorf("bgp_peers[%d]: peer_address is required", i)
+		}
+		if peer.ExpectedTTL == 0 && peer.MaxHops == 0 {
+			return fmt.Errorf("bgp_peers[%d] (%s): at least one of expected_ttl or max_hops must be set", i, peer.PeerAddress)
+		}
+	}
 	return nil
 }
