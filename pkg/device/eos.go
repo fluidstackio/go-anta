@@ -33,7 +33,7 @@ func NewEOSDevice(config DeviceConfig) *EOSDevice {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: config.Insecure,
 		MinVersion:         tls.VersionTLS10, // Support older TLS versions for compatibility
-		MaxVersion:         0,                 // Allow any TLS version (0 means use Go's default max)
+		MaxVersion:         0,                // Allow any TLS version (0 means use Go's default max)
 		// Include legacy cipher suites for older EOS versions
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -285,7 +285,7 @@ func (d *EOSDevice) Traceroute(ctx context.Context, opts TracerouteOpts) (*Trace
 func (d *EOSDevice) executeCommand(ctx context.Context, cmd Command) (*CommandResult, error) {
 	cmdStr := d.expandTemplate(cmd)
 	logger.Debugf("Executing command on %s: %s", d.Config.Name, cmdStr)
-	
+
 	logger.Debugf("Creating JSON-RPC payload for %s", d.Config.Name)
 	// Use the simple format that works with curl
 	payload := map[string]interface{}{
@@ -412,7 +412,7 @@ func (d *EOSDevice) sendRequest(ctx context.Context, payload interface{}) ([]byt
 	httpCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	req = req.WithContext(httpCtx)
-	
+
 	logger.Debugf("About to execute HTTP client.Do() for %s", d.Config.Name)
 	resp, err := d.client.Do(req)
 	logger.Debugf("HTTP client.Do() completed for %s", d.Config.Name)

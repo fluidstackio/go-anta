@@ -175,4 +175,3 @@ func parseNetboxQueryString(s string) inventory.NetboxQuery {
 	}
 	return q
 }
-

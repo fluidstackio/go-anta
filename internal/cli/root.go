@@ -73,7 +73,7 @@ func initConfig() {
 			fmt.Println("Using config file:", viper.ConfigFileUsed())
 		}
 	}
-	
+
 	// Configure logging
 	if verbose {
 		logger.SetVerbose(true)
@@ -85,7 +85,7 @@ func initConfig() {
 			logger.SetLevel(level)
 		}
 	}
-	
+
 	// Set log output file if specified
 	if logFile != "" {
 		if err := logger.SetOutput(logFile); err != nil {

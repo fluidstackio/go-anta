@@ -20,23 +20,26 @@ import (
 //   - Utilization is calculated as the maximum of input and output rates against interface bandwidth.
 //
 // Examples:
+//
 //   - name: VerifyInterfaceUtilization global threshold
 //     VerifyInterfaceUtilization:
-//       threshold: 75.0  # Global threshold for all interfaces
+//     threshold: 75.0  # Global threshold for all interfaces
 //
 //   - name: VerifyInterfaceUtilization per-interface thresholds
 //     VerifyInterfaceUtilization:
-//       threshold: 70.0
-//       interfaces:
-//         - name: "Ethernet1/1"
-//           threshold: 80.0  # Interface-specific threshold
-//         - name: "Ethernet2/1"
-//           # Uses global threshold if not specified
+//     threshold: 70.0
+//     interfaces:
+//
+//   - name: "Ethernet1/1"
+//     threshold: 80.0  # Interface-specific threshold
+//
+//   - name: "Ethernet2/1"
+//     # Uses global threshold if not specified
 type VerifyInterfaceUtilization struct {
 	test.BaseTest
-	Threshold  float64                         `yaml:"threshold,omitempty" json:"threshold,omitempty"`
+	Threshold  float64                        `yaml:"threshold,omitempty" json:"threshold,omitempty"`
 	Interfaces []InterfaceUtilizationSettings `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
-	CheckAll   bool                            `yaml:"check_all,omitempty" json:"check_all,omitempty"`
+	CheckAll   bool                           `yaml:"check_all,omitempty" json:"check_all,omitempty"`
 }
 
 type InterfaceUtilizationSettings struct {

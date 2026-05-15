@@ -254,9 +254,9 @@ func (t *VerifyEOSExtensions) Execute(ctx context.Context, dev device.Device) (*
 	} else if extensionCount == 0 {
 		// No extensions found - this could be normal
 		result.Details = map[string]interface{}{
-			"total_extensions":        0,
-			"boot_persistent_count":   0,
-			"message":                 "No EOS extensions found",
+			"total_extensions":      0,
+			"boot_persistent_count": 0,
+			"message":               "No EOS extensions found",
 		}
 	} else {
 		result.Details = map[string]interface{}{

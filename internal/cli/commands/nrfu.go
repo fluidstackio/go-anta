@@ -9,42 +9,42 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"github.com/fluidstackio/go-anta/pkg/inventory"
-	"github.com/fluidstackio/go-anta/internal/logger"
 	"github.com/fluidstackio/go-anta/pkg/reporter"
 	"github.com/fluidstackio/go-anta/pkg/test"
 	"github.com/spf13/cobra"
 )
 
 var (
-	inventoryFile     string
-	catalogFile       string
-	netboxURL         string
-	netboxToken       string
-	netboxQuery       string
-	tags              string
-	devices           string
-	tests             string
-	limit             string
-	deviceUsername    string
-	devicePassword    string
-	concurrency       int
-	dryRun            bool
-	ignoreStatus      bool
-	hide              string
-	outputFile        string
-	format            string
-	logLevel          string
-	verbose           bool
-	quiet             bool
-	progress          bool
-	silent            bool
-	transport         string
-	source            string
-	region            string
-	filter            string
-	plaintext         bool
+	inventoryFile  string
+	catalogFile    string
+	netboxURL      string
+	netboxToken    string
+	netboxQuery    string
+	tags           string
+	devices        string
+	tests          string
+	limit          string
+	deviceUsername string
+	devicePassword string
+	concurrency    int
+	dryRun         bool
+	ignoreStatus   bool
+	hide           string
+	outputFile     string
+	format         string
+	logLevel       string
+	verbose        bool
+	quiet          bool
+	progress       bool
+	silent         bool
+	transport      string
+	source         string
+	region         string
+	filter         string
+	plaintext      bool
 )
 
 var NrfuCmd = &cobra.Command{
@@ -150,7 +150,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 
 	if dryRun {
 		fmt.Printf("Would run %d tests on %d devices\n\n", len(catalog.Tests), len(inv.Devices))
-		
+
 		// Display devices in a table
 		fmt.Println("Devices:")
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
@@ -164,7 +164,7 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(w, "%s\t%s\t%s\n", dev.Name, dev.Host, tags)
 		}
 		w.Flush()
-		
+
 		// Display tests
 		fmt.Println("\nTests:")
 		for _, t := range catalog.Tests {
@@ -174,8 +174,8 @@ func runNrfu(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Printf("  - %s (module: %s)%s\n", t.Name, t.Module, cats)
 		}
-		
-		fmt.Printf("\nTotal: %d tests × %d devices = %d test executions\n", 
+
+		fmt.Printf("\nTotal: %d tests × %d devices = %d test executions\n",
 			len(catalog.Tests), len(inv.Devices), len(catalog.Tests)*len(inv.Devices))
 		return nil
 	}
@@ -274,7 +274,6 @@ func filterResults(results []test.TestResult, hide string) []test.TestResult {
 	}
 	return filtered
 }
-
 
 // configureLogging sets up logging based on command line flags
 func configureLogging() {

@@ -129,9 +129,9 @@ func (d *GNMIDevice) Traceroute(ctx context.Context, opts TracerouteOpts) (*Trac
 	defer conn.Close()
 
 	req := &gnoisystem.TracerouteRequest{
-		Destination:     opts.Destination,
-		MaxTtl:          int32(opts.MaxTTL),
-		Wait:            int64(opts.Wait),
+		Destination: opts.Destination,
+		MaxTtl:      int32(opts.MaxTTL),
+		Wait:        int64(opts.Wait),
 	}
 	if opts.Source != "" {
 		req.Source = opts.Source

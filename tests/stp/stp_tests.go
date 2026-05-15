@@ -19,8 +19,8 @@ import (
 // Examples:
 //   - name: VerifySTPMode for specific VLANs
 //     VerifySTPMode:
-//       mode: "mstp"
-//       vlans: [10, 20, 30]
+//     mode: "mstp"
+//     vlans: [10, 20, 30]
 type VerifySTPMode struct {
 	test.BaseTest
 	Mode  string `yaml:"mode" json:"mode"`

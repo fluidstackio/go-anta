@@ -82,42 +82,42 @@ type NetboxQuery struct {
 	RegionID       int      `yaml:"region_id,omitempty" json:"region_id,omitempty"`
 	Name           string   `yaml:"name,omitempty" json:"name,omitempty"`
 	NameContains   string   `yaml:"name__ic,omitempty" json:"name__ic,omitempty"`
-	
+
 	// Custom fields
 	CustomFields map[string]string `yaml:"custom_fields,omitempty" json:"custom_fields,omitempty"`
-	
+
 	// Query options
-	Limit  int  `yaml:"limit,omitempty" json:"limit,omitempty"`
-	Offset int  `yaml:"offset,omitempty" json:"offset,omitempty"`
-	
+	Limit  int `yaml:"limit,omitempty" json:"limit,omitempty"`
+	Offset int `yaml:"offset,omitempty" json:"offset,omitempty"`
+
 	// Include inactive devices
 	IncludeInactive bool `yaml:"include_inactive,omitempty" json:"include_inactive,omitempty"`
 }
 
 // NetboxDevice represents a device from Netbox API
 type NetboxDevice struct {
-	ID          int                    `json:"id"`
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"display_name"`
-	DeviceType  NetboxDeviceType       `json:"device_type"`
-	DeviceRole  NetboxDeviceRole       `json:"device_role"`
-	Platform    *NetboxPlatform        `json:"platform"`
-	Serial      string                 `json:"serial"`
-	Site        NetboxSite             `json:"site"`
-	Status      NetboxStatus           `json:"status"`
-	PrimaryIP   *NetboxIPAddress       `json:"primary_ip"`
-	PrimaryIP4  *NetboxIPAddress       `json:"primary_ip4"`
-	PrimaryIP6  *NetboxIPAddress       `json:"primary_ip6"`
-	Tags        []NetboxTag            `json:"tags"`
+	ID           int                    `json:"id"`
+	Name         string                 `json:"name"`
+	DisplayName  string                 `json:"display_name"`
+	DeviceType   NetboxDeviceType       `json:"device_type"`
+	DeviceRole   NetboxDeviceRole       `json:"device_role"`
+	Platform     *NetboxPlatform        `json:"platform"`
+	Serial       string                 `json:"serial"`
+	Site         NetboxSite             `json:"site"`
+	Status       NetboxStatus           `json:"status"`
+	PrimaryIP    *NetboxIPAddress       `json:"primary_ip"`
+	PrimaryIP4   *NetboxIPAddress       `json:"primary_ip4"`
+	PrimaryIP6   *NetboxIPAddress       `json:"primary_ip6"`
+	Tags         []NetboxTag            `json:"tags"`
 	CustomFields map[string]interface{} `json:"custom_fields"`
 }
 
 type NetboxDeviceType struct {
-	ID           int                  `json:"id"`
-	Display      string               `json:"display"`
-	Manufacturer NetboxManufacturer   `json:"manufacturer"`
-	Model        string               `json:"model"`
-	Slug         string               `json:"slug"`
+	ID           int                `json:"id"`
+	Display      string             `json:"display"`
+	Manufacturer NetboxManufacturer `json:"manufacturer"`
+	Model        string             `json:"model"`
+	Slug         string             `json:"slug"`
 }
 
 type NetboxManufacturer struct {
@@ -177,73 +177,73 @@ type NetboxResponse struct {
 func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]NetboxDevice, error) {
 	logger.Infof("Querying Netbox API: %s", c.config.URL)
 	params := url.Values{}
-	
+
 	// Apply filters - use IDs if provided, otherwise use slugs
 	if query.SiteID > 0 {
 		params.Set("site_id", fmt.Sprintf("%d", query.SiteID))
 	} else if query.Site != "" {
 		params.Set("site", query.Site)
 	}
-	
+
 	if query.RoleID > 0 {
 		params.Set("role_id", fmt.Sprintf("%d", query.RoleID))
 	} else if query.Role != "" {
 		params.Set("role", query.Role)
 	}
-	
+
 	if query.DeviceTypeID > 0 {
 		params.Set("device_type_id", fmt.Sprintf("%d", query.DeviceTypeID))
 	} else if query.DeviceType != "" {
 		params.Set("device_type", query.DeviceType)
 	}
-	
+
 	if query.ManufacturerID > 0 {
 		params.Set("manufacturer_id", fmt.Sprintf("%d", query.ManufacturerID))
 	} else if query.Manufacturer != "" {
 		params.Set("manufacturer", query.Manufacturer)
 	}
-	
+
 	if query.PlatformID > 0 {
 		params.Set("platform_id", fmt.Sprintf("%d", query.PlatformID))
 	} else if query.Platform != "" {
 		params.Set("platform", query.Platform)
 	}
-	
+
 	if query.TenantID > 0 {
 		params.Set("tenant_id", fmt.Sprintf("%d", query.TenantID))
 	} else if query.Tenant != "" {
 		params.Set("tenant", query.Tenant)
 	}
-	
+
 	if query.RegionID > 0 {
 		params.Set("region_id", fmt.Sprintf("%d", query.RegionID))
 	} else if query.Region != "" {
 		params.Set("region", query.Region)
 	}
-	
+
 	if query.Status != "" {
 		params.Set("status", query.Status)
 	} else if !query.IncludeInactive {
 		params.Set("status", "active")
 	}
-	
+
 	if query.Name != "" {
 		params.Set("name", query.Name)
 	}
 	if query.NameContains != "" {
 		params.Set("name__ic", query.NameContains)
 	}
-	
+
 	// Add tags
 	for _, tag := range query.Tags {
 		params.Add("tag", tag)
 	}
-	
+
 	// Add custom fields
 	for key, value := range query.CustomFields {
 		params.Set(fmt.Sprintf("cf_%s", key), value)
 	}
-	
+
 	// Set pagination
 	if query.Limit > 0 {
 		params.Set("limit", fmt.Sprintf("%d", query.Limit))
@@ -253,11 +253,11 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 	if query.Offset > 0 {
 		params.Set("offset", fmt.Sprintf("%d", query.Offset))
 	}
-	
+
 	// Build URL
 	apiURL := fmt.Sprintf("%s/api/dcim/devices/?%s", strings.TrimRight(c.config.URL, "/"), params.Encode())
 	logger.Debugf("Netbox API URL: %s", apiURL)
-	
+
 	var allDevices []NetboxDevice
 
 	for apiURL != "" {
@@ -278,7 +278,7 @@ func (c *NetboxClient) GetDevices(ctx context.Context, query NetboxQuery) ([]Net
 			break
 		}
 	}
-	
+
 	logger.Infof("Successfully loaded %d devices from Netbox", len(allDevices))
 	return allDevices, nil
 }
@@ -312,4 +312,3 @@ func (c *NetboxClient) fetchDevicesPage(ctx context.Context, apiURL string) (*Ne
 	}
 	return &nbResp, nil
 }
-

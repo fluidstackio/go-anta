@@ -515,25 +515,25 @@ func parseBgpRoutes(inputs map[string]any) ([]BgpRoute, error) {
 
 // BgpPeerExtended represents extended BGP peer configuration
 type BgpPeerExtended struct {
-	PeerAddress           string                 `yaml:"peer_address,omitempty" json:"peer_address,omitempty"`
-	Interface             string                 `yaml:"interface,omitempty" json:"interface,omitempty"`
-	VRF                   string                 `yaml:"vrf,omitempty" json:"vrf,omitempty"`
-	AdvertisedRoutes      []string               `yaml:"advertised_routes,omitempty" json:"advertised_routes,omitempty"`
-	ReceivedRoutes        []string               `yaml:"received_routes,omitempty" json:"received_routes,omitempty"`
-	AdvertisedCommunities []string               `yaml:"advertised_communities,omitempty" json:"advertised_communities,omitempty"`
-	Capabilities          []string               `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
-	HoldTime              int                    `yaml:"hold_time,omitempty" json:"hold_time,omitempty"`
-	KeepAliveTime         int                    `yaml:"keep_alive_time,omitempty" json:"keep_alive_time,omitempty"`
-	MaximumRoutes         int                    `yaml:"maximum_routes,omitempty" json:"maximum_routes,omitempty"`
-	WarningLimit          int                    `yaml:"warning_limit,omitempty" json:"warning_limit,omitempty"`
-	PeerGroup             string                 `yaml:"peer_group,omitempty" json:"peer_group,omitempty"`
-	TTL                   int                    `yaml:"ttl,omitempty" json:"ttl,omitempty"`
-	ExpectedTTL           int                    `yaml:"expected_ttl,omitempty" json:"expected_ttl,omitempty"`
-	MaxHops               int                    `yaml:"max_hops,omitempty" json:"max_hops,omitempty"`
-	DropStats             map[string]int         `yaml:"drop_stats,omitempty" json:"drop_stats,omitempty"`
+	PeerAddress           string         `yaml:"peer_address,omitempty" json:"peer_address,omitempty"`
+	Interface             string         `yaml:"interface,omitempty" json:"interface,omitempty"`
+	VRF                   string         `yaml:"vrf,omitempty" json:"vrf,omitempty"`
+	AdvertisedRoutes      []string       `yaml:"advertised_routes,omitempty" json:"advertised_routes,omitempty"`
+	ReceivedRoutes        []string       `yaml:"received_routes,omitempty" json:"received_routes,omitempty"`
+	AdvertisedCommunities []string       `yaml:"advertised_communities,omitempty" json:"advertised_communities,omitempty"`
+	Capabilities          []string       `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	HoldTime              int            `yaml:"hold_time,omitempty" json:"hold_time,omitempty"`
+	KeepAliveTime         int            `yaml:"keep_alive_time,omitempty" json:"keep_alive_time,omitempty"`
+	MaximumRoutes         int            `yaml:"maximum_routes,omitempty" json:"maximum_routes,omitempty"`
+	WarningLimit          int            `yaml:"warning_limit,omitempty" json:"warning_limit,omitempty"`
+	PeerGroup             string         `yaml:"peer_group,omitempty" json:"peer_group,omitempty"`
+	TTL                   int            `yaml:"ttl,omitempty" json:"ttl,omitempty"`
+	ExpectedTTL           int            `yaml:"expected_ttl,omitempty" json:"expected_ttl,omitempty"`
+	MaxHops               int            `yaml:"max_hops,omitempty" json:"max_hops,omitempty"`
+	DropStats             map[string]int `yaml:"drop_stats,omitempty" json:"drop_stats,omitempty"`
 	UpdateErrors          map[string]any `yaml:"update_errors,omitempty" json:"update_errors,omitempty"`
-	InboundRouteMap       string                 `yaml:"inbound_route_map,omitempty" json:"inbound_route_map,omitempty"`
-	OutboundRouteMap      string                 `yaml:"outbound_route_map,omitempty" json:"outbound_route_map,omitempty"`
+	InboundRouteMap       string         `yaml:"inbound_route_map,omitempty" json:"inbound_route_map,omitempty"`
+	OutboundRouteMap      string         `yaml:"outbound_route_map,omitempty" json:"outbound_route_map,omitempty"`
 }
 
 // VerifyBGPPeerCount verifies the count of BGP peers for specified address families.
@@ -723,20 +723,24 @@ func (t *VerifyBGPPeerCount) ValidateInput(input any) error {
 //   - Error: The test will report an error if BGP peer information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyBGPPeersHealth with minimum established time
 //     VerifyBGPPeersHealth:
-//       minimum_established_time: 300  # 5 minutes
-//       check_tcp_queues: true
-//       address_families:
-//         - afi: "ipv4"
-//           safi: "unicast"
-//         - afi: "evpn"
+//     minimum_established_time: 300  # 5 minutes
+//     check_tcp_queues: true
+//     address_families:
+//
+//   - afi: "ipv4"
+//     safi: "unicast"
+//
+//   - afi: "evpn"
 //
 //   - name: VerifyBGPPeersHealth basic check
 //     VerifyBGPPeersHealth:
-//       address_families:
-//         - afi: "ipv4"
-//           safi: "unicast"
+//     address_families:
+//
+//   - afi: "ipv4"
+//     safi: "unicast"
 type VerifyBGPPeersHealth struct {
 	test.BaseTest
 	MinimumEstablishedTime int                `yaml:"minimum_established_time,omitempty" json:"minimum_established_time,omitempty"`
@@ -908,11 +912,11 @@ func (t *VerifyBGPPeersHealth) ValidateInput(input any) error {
 //   - name: "VerifyBGPSpecificPeers"
 //     module: "routing"
 //     inputs:
-//       address_families:
-//         - afi: "ipv4"
-//           safi: "unicast"
-//         - afi: "evpn"
-//           safi: "evpn"
+//     address_families:
+//   - afi: "ipv4"
+//     safi: "unicast"
+//   - afi: "evpn"
+//     safi: "evpn"
 type VerifyBGPSpecificPeers struct {
 	test.BaseTest
 	AddressFamilies []BgpAddressFamily `yaml:"address_families" json:"address_families"`
@@ -1071,10 +1075,10 @@ func (t *VerifyBGPSpecificPeers) ValidateInput(input any) error {
 // they are established and healthy.
 //
 // This test performs the following checks for each specified peer:
-//   1. Verifies that the peer is found in its VRF in the BGP configuration.
-//   2. Verifies that the BGP session is `Established` and, if specified, has remained established for at least the duration given by `minimum_established_time`.
-//   3. Ensures that both input and output TCP message queues are empty.
-//      Can be disabled by setting `check_tcp_queues` input flag to `False`.
+//  1. Verifies that the peer is found in its VRF in the BGP configuration.
+//  2. Verifies that the BGP session is `Established` and, if specified, has remained established for at least the duration given by `minimum_established_time`.
+//  3. Ensures that both input and output TCP message queues are empty.
+//     Can be disabled by setting `check_tcp_queues` input flag to `False`.
 //
 // Expected Results:
 //   - Success: All specified peers are found with established sessions and clean TCP queues.
@@ -1085,17 +1089,17 @@ func (t *VerifyBGPSpecificPeers) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeerSession"
 //     module: "routing"
 //     inputs:
-//       minimum_established_time: 10000
-//       check_tcp_queues: false
-//       bgp_peers:
-//         - peer_address: "10.1.0.1"
-//           vrf: "default"
-//         - peer_address: "10.1.255.4"
-//           vrf: "DEV"
-//         - peer_address: "fd00:dc:1::1"
-//           vrf: "default"
-//         - interface: "Ethernet1"
-//           vrf: "MGMT"
+//     minimum_established_time: 10000
+//     check_tcp_queues: false
+//     bgp_peers:
+//   - peer_address: "10.1.0.1"
+//     vrf: "default"
+//   - peer_address: "10.1.255.4"
+//     vrf: "DEV"
+//   - peer_address: "fd00:dc:1::1"
+//     vrf: "default"
+//   - interface: "Ethernet1"
+//     vrf: "MGMT"
 type VerifyBGPPeerSession struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -1245,19 +1249,19 @@ func (t *VerifyBGPPeerSession) ValidateInput(input any) error { return nil }
 //   - name: "VerifyBGPExchangedRoutes"
 //     module: "routing"
 //     inputs:
-//       check_active: true
-//       bgp_peers:
-//         - peer_address: "172.30.255.5"
-//           vrf: "default"
-//           advertised_routes:
-//             - "192.0.254.5/32"
-//           received_routes:
-//             - "192.0.255.4/32"
-//         - peer_address: "172.30.255.1"
-//           vrf: "default"
-//           advertised_routes:
-//             - "192.0.255.1/32"
-//             - "192.0.254.5/32"
+//     check_active: true
+//     bgp_peers:
+//   - peer_address: "172.30.255.5"
+//     vrf: "default"
+//     advertised_routes:
+//   - "192.0.254.5/32"
+//     received_routes:
+//   - "192.0.255.4/32"
+//   - peer_address: "172.30.255.1"
+//     vrf: "default"
+//     advertised_routes:
+//   - "192.0.255.1/32"
+//   - "192.0.254.5/32"
 type VerifyBGPExchangedRoutes struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -1408,11 +1412,11 @@ func (t *VerifyBGPExchangedRoutes) ValidateInput(input any) error { return nil }
 //   - name: "VerifyBGPPeerMPCaps"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "10.0.0.1"
-//           vrf: "default"
-//         - peer_address: "2001:db8::1"
-//           vrf: "default"
+//     bgp_peers:
+//   - peer_address: "10.0.0.1"
+//     vrf: "default"
+//   - peer_address: "2001:db8::1"
+//     vrf: "default"
 type VerifyBGPPeerMPCaps struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -1532,11 +1536,11 @@ func (t *VerifyBGPPeerMPCaps) ValidateInput(input any) error { return nil }
 //   - name: "VerifyBGPPeerASNCap"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "10.0.0.1"
-//           vrf: "default"
-//         - peer_address: "192.168.1.1"
-//           vrf: "MGMT"
+//     bgp_peers:
+//   - peer_address: "10.0.0.1"
+//     vrf: "default"
+//   - peer_address: "192.168.1.1"
+//     vrf: "MGMT"
 type VerifyBGPPeerASNCap struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -1592,7 +1596,7 @@ func (t *VerifyBGPPeerASNCap) Execute(ctx context.Context, dev device.Device) (*
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				Capabilities struct {
@@ -1668,11 +1672,11 @@ func (t *VerifyBGPPeerASNCap) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeerRouteRefreshCap"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "10.0.0.1"
-//           vrf: "default"
-//         - peer_address: "172.16.1.1"
-//           vrf: "PROD"
+//     bgp_peers:
+//   - peer_address: "10.0.0.1"
+//     vrf: "default"
+//   - peer_address: "172.16.1.1"
+//     vrf: "PROD"
 type VerifyBGPPeerRouteRefreshCap struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -1728,7 +1732,7 @@ func (t *VerifyBGPPeerRouteRefreshCap) Execute(ctx context.Context, dev device.D
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				Capabilities struct {
@@ -1864,7 +1868,7 @@ func (t *VerifyBGPPeerMD5Auth) Execute(ctx context.Context, dev device.Device) (
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				TcpMD5Auth bool `json:"tcpMd5AuthEnabled"`
@@ -1933,12 +1937,12 @@ func (t *VerifyBGPPeerMD5Auth) ValidateInput(input any) error {
 //   - name: "VerifyEVPNType2Route"
 //     module: "routing"
 //     inputs:
-//       expected_routes:
-//         - mac_address: "00:1c:73:00:00:01"
-//           ip_address: "192.168.1.1"
-//           vni: 10001
-//         - mac_address: "00:1c:73:00:00:02"
-//           vni: 10002
+//     expected_routes:
+//   - mac_address: "00:1c:73:00:00:01"
+//     ip_address: "192.168.1.1"
+//     vni: 10001
+//   - mac_address: "00:1c:73:00:00:02"
+//     vni: 10002
 type VerifyEVPNType2Route struct {
 	test.BaseTest
 }
@@ -2215,7 +2219,7 @@ func (t *VerifyBGPTimers) Execute(ctx context.Context, dev device.Device) (*test
 		} `json:"vrfs"`
 	}
 
-if err := decodeOutput(cmdResult.Output, &response); err != nil {
+	if err := decodeOutput(cmdResult.Output, &response); err != nil {
 		result.Status = test.TestError
 		result.Message = fmt.Sprintf("Failed to parse BGP neighbors output: %v", err)
 		return result, nil
@@ -2278,11 +2282,11 @@ func (t *VerifyBGPTimers) ValidateInput(input any) error {
 // healthy route exchange without packet drops or processing issues.
 //
 // This test performs the following checks for each specified peer:
-//   1. Verifies that the peer is found in its VRF in the BGP configuration.
-//   2. Validates the BGP drop statistics:
-//      - If specific drop statistics are provided, checks only those counters.
-//      - If no specific drop statistics are provided, checks all available counters.
-//      - Confirms that all checked counters have a value of zero.
+//  1. Verifies that the peer is found in its VRF in the BGP configuration.
+//  2. Validates the BGP drop statistics:
+//     - If specific drop statistics are provided, checks only those counters.
+//     - If no specific drop statistics are provided, checks all available counters.
+//     - Confirms that all checked counters have a value of zero.
 //
 // Expected Results:
 //   - Success: All specified peers are found with zero drop statistics.
@@ -2293,17 +2297,17 @@ func (t *VerifyBGPTimers) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeerDropStats"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "172.30.11.1"
-//           vrf: "default"
-//           drop_stats:
-//             - "inDropAsloop"
-//             - "prefixEvpnDroppedUnsupportedRouteType"
-//         - peer_address: "fd00:dc:1::1"
-//           vrf: "default"
-//           drop_stats:
-//             - "inDropAsloop"
-//             - "prefixEvpnDroppedUnsupportedRouteType"
+//     bgp_peers:
+//   - peer_address: "172.30.11.1"
+//     vrf: "default"
+//     drop_stats:
+//   - "inDropAsloop"
+//   - "prefixEvpnDroppedUnsupportedRouteType"
+//   - peer_address: "fd00:dc:1::1"
+//     vrf: "default"
+//     drop_stats:
+//   - "inDropAsloop"
+//   - "prefixEvpnDroppedUnsupportedRouteType"
 type VerifyBGPPeerDropStats struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -2429,11 +2433,11 @@ func (t *VerifyBGPPeerDropStats) ValidateInput(input any) error {
 // clean route updates without malformed messages or processing errors.
 //
 // This test performs the following checks for each specified peer:
-//   1. Verifies that the peer is found in its VRF in the BGP configuration.
-//   2. Validates the BGP update error counters:
-//      - If specific update error counters are provided, checks only those counters.
-//      - If no update error counters are provided, checks all available counters.
-//      - Confirms that all checked counters have a value of zero.
+//  1. Verifies that the peer is found in its VRF in the BGP configuration.
+//  2. Validates the BGP update error counters:
+//     - If specific update error counters are provided, checks only those counters.
+//     - If no update error counters are provided, checks all available counters.
+//     - Confirms that all checked counters have a value of zero.
 //
 // Note: For "disabledAfiSafi" error counter field, checking that it's not "None" versus 0.
 //
@@ -2446,15 +2450,15 @@ func (t *VerifyBGPPeerDropStats) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeerUpdateErrors"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "172.30.11.1"
-//           vrf: "default"
-//           update_errors:
-//             - "inUpdErrWithdraw"
-//         - peer_address: "fd00:dc:1::1"
-//           vrf: "default"
-//           update_errors:
-//             - "inUpdErrWithdraw"
+//     bgp_peers:
+//   - peer_address: "172.30.11.1"
+//     vrf: "default"
+//     update_errors:
+//   - "inUpdErrWithdraw"
+//   - peer_address: "fd00:dc:1::1"
+//     vrf: "default"
+//     update_errors:
+//   - "inUpdErrWithdraw"
 type VerifyBGPPeerUpdateErrors struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -2594,8 +2598,8 @@ func (t *VerifyBGPPeerUpdateErrors) ValidateInput(input any) error {
 // routing information as it is received from and sent to BGP peers.
 //
 // This test performs the following checks for each specified peer:
-//   1. Verifies that the peer is found in its VRF in the BGP configuration.
-//   2. Validates the correct BGP route maps are applied in the correct direction (inbound or outbound).
+//  1. Verifies that the peer is found in its VRF in the BGP configuration.
+//  2. Validates the correct BGP route maps are applied in the correct direction (inbound or outbound).
 //
 // Expected Results:
 //   - Success: All specified peers are found with correct route maps in both directions.
@@ -2606,15 +2610,15 @@ func (t *VerifyBGPPeerUpdateErrors) ValidateInput(input any) error {
 //   - name: "VerifyBgpRouteMaps"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "172.30.11.1"
-//           vrf: "default"
-//           inbound_route_map: "RM-MLAG-PEER-IN"
-//           outbound_route_map: "RM-MLAG-PEER-OUT"
-//         - peer_address: "fd00:dc:1::1"
-//           vrf: "default"
-//           inbound_route_map: "RM-MLAG-PEER-IN"
-//           outbound_route_map: "RM-MLAG-PEER-OUT"
+//     bgp_peers:
+//   - peer_address: "172.30.11.1"
+//     vrf: "default"
+//     inbound_route_map: "RM-MLAG-PEER-IN"
+//     outbound_route_map: "RM-MLAG-PEER-OUT"
+//   - peer_address: "fd00:dc:1::1"
+//     vrf: "default"
+//     inbound_route_map: "RM-MLAG-PEER-IN"
+//     outbound_route_map: "RM-MLAG-PEER-OUT"
 type VerifyBgpRouteMaps struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -2676,7 +2680,7 @@ func (t *VerifyBgpRouteMaps) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PolicyInbound  string `json:"policyInbound"`
@@ -2841,7 +2845,7 @@ func (t *VerifyBGPPeerRouteLimit) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				MaxPrefixesLimit   int `json:"maxPrefixesLimit"`
@@ -3000,7 +3004,7 @@ func (t *VerifyBGPPeerGroup) Execute(ctx context.Context, dev device.Device) (*t
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PeerGroup string `json:"peerGroup"`
@@ -3135,7 +3139,7 @@ func (t *VerifyBGPPeerSessionRibd) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				SessionState string `json:"sessionState"`
@@ -3205,11 +3209,11 @@ func (t *VerifyBGPPeerSessionRibd) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeersHealthRibd"
 //     module: "routing"
 //     inputs:
-//       address_families:
-//         - afi: "ipv4"
-//           safi: "unicast"
-//         - afi: "evpn"
-//           safi: "evpn"
+//     address_families:
+//   - afi: "ipv4"
+//     safi: "unicast"
+//   - afi: "evpn"
+//     safi: "evpn"
 type VerifyBGPPeersHealthRibd struct {
 	test.BaseTest
 	AddressFamilies []BgpAddressFamily `yaml:"address_families" json:"address_families"`
@@ -3268,7 +3272,7 @@ func (t *VerifyBGPPeersHealthRibd) Execute(ctx context.Context, dev device.Devic
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			AddressFamilies map[string]struct {
 				Neighbors map[string]struct {
@@ -3349,11 +3353,11 @@ func (t *VerifyBGPPeersHealthRibd) ValidateInput(input any) error {
 //   - name: "VerifyBGPNlriAcceptance"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "10.0.0.1"
-//           vrf: "default"
-//         - peer_address: "192.168.1.1"
-//           vrf: "PROD"
+//     bgp_peers:
+//   - peer_address: "10.0.0.1"
+//     vrf: "default"
+//   - peer_address: "192.168.1.1"
+//     vrf: "PROD"
 type VerifyBGPNlriAcceptance struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`
@@ -3409,7 +3413,7 @@ func (t *VerifyBGPNlriAcceptance) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
-var response struct {
+	var response struct {
 		VRFs map[string]struct {
 			Neighbors map[string]struct {
 				PrefixesReceived int `json:"prefixesReceived"`
@@ -3480,12 +3484,12 @@ func (t *VerifyBGPNlriAcceptance) ValidateInput(input any) error {
 //   - name: "VerifyBGPRoutePaths"
 //     module: "routing"
 //     inputs:
-//       routes:
-//         - prefix: "192.168.1.0/24"
-//           expected_paths: 2
-//           vrf: "default"
-//         - prefix: "10.0.0.0/8"
-//           expected_paths: 3
+//     routes:
+//   - prefix: "192.168.1.0/24"
+//     expected_paths: 2
+//     vrf: "default"
+//   - prefix: "10.0.0.0/8"
+//     expected_paths: 3
 type VerifyBGPRoutePaths struct {
 	test.BaseTest
 	Routes []BgpRoute `yaml:"routes" json:"routes"`
@@ -3603,12 +3607,12 @@ func (t *VerifyBGPRoutePaths) ValidateInput(input any) error {
 //   - name: "VerifyBGPRouteECMP"
 //     module: "routing"
 //     inputs:
-//       routes:
-//         - prefix: "192.168.1.0/24"
-//           expected_paths: 4
-//           vrf: "default"
-//         - prefix: "10.0.0.0/16"
-//           expected_paths: 2
+//     routes:
+//   - prefix: "192.168.1.0/24"
+//     expected_paths: 4
+//     vrf: "default"
+//   - prefix: "10.0.0.0/16"
+//     expected_paths: 2
 type VerifyBGPRouteECMP struct {
 	test.BaseTest
 	Routes []BgpRoute `yaml:"routes" json:"routes"`
@@ -3740,12 +3744,13 @@ func (t *VerifyBGPRouteECMP) ValidateInput(input any) error {
 //   - name: "VerifyBGPRedistribution"
 //     module: "routing"
 //     inputs:
-//       redistributed_routes:
-//         - source_protocol: "ospf"
-//           expected_count: 10
-//           vrf: "default"
-//         - source_protocol: "static"
-//           expected_count: 5
+//     redistributed_routes:
+//   - source_protocol: "ospf"
+//     expected_count: 10
+//     vrf: "default"
+//   - source_protocol: "static"
+//     expected_count: 5
+//
 // BgpRedistribution names a source routing protocol expected to be
 // redistributed into BGP for a given VRF.
 type BgpRedistribution struct {
@@ -3951,11 +3956,11 @@ func (t *VerifyBGPRedistribution) ValidateInput(input any) error {
 //   - name: "VerifyBGPPeerTtlMultiHops"
 //     module: "routing"
 //     inputs:
-//       bgp_peers:
-//         - peer_address: "10.0.0.1"
-//           expected_ttl: 255
-//           max_hops: 5
-//           vrf: "default"
+//     bgp_peers:
+//   - peer_address: "10.0.0.1"
+//     expected_ttl: 255
+//     max_hops: 5
+//     vrf: "default"
 type VerifyBGPPeerTtlMultiHops struct {
 	test.BaseTest
 	BGPPeers []BgpPeerExtended `yaml:"bgp_peers" json:"bgp_peers"`

@@ -25,17 +25,17 @@ import (
 //   - name: "VerifyInventory"
 //     module: "hardware"
 //     inputs:
-//       minimum_memory: 8192  # in MB
-//       minimum_flash: 4096   # in MB
-//       required_modules:
-//         - "DCS-7050SX3-48YC8"
-//         - "PWR-460AC-F"
+//     minimum_memory: 8192  # in MB
+//     minimum_flash: 4096   # in MB
+//     required_modules:
+//   - "DCS-7050SX3-48YC8"
+//   - "PWR-460AC-F"
 type VerifyInventory struct {
 	test.BaseTest
-	MinimumMemory    int64    `yaml:"minimum_memory,omitempty" json:"minimum_memory,omitempty"`
-	MinimumFlash     int64    `yaml:"minimum_flash,omitempty" json:"minimum_flash,omitempty"`
-	MinimumSupplies  int      `yaml:"minimum_supplies,omitempty" json:"minimum_supplies,omitempty"`
-	RequiredModules  []string `yaml:"required_modules,omitempty" json:"required_modules,omitempty"`
+	MinimumMemory   int64    `yaml:"minimum_memory,omitempty" json:"minimum_memory,omitempty"`
+	MinimumFlash    int64    `yaml:"minimum_flash,omitempty" json:"minimum_flash,omitempty"`
+	MinimumSupplies int      `yaml:"minimum_supplies,omitempty" json:"minimum_supplies,omitempty"`
+	RequiredModules []string `yaml:"required_modules,omitempty" json:"required_modules,omitempty"`
 }
 
 func NewVerifyInventory(inputs map[string]any) (test.Test, error) {

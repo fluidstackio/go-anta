@@ -16,18 +16,21 @@ import (
 //   - Error: The test will report an error if interface error statistics cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyInterfaceErrors with specific thresholds
 //     VerifyInterfaceErrors:
-//       interfaces:
-//         - name: "Ethernet1/1"
-//           fcs_errors: 0
-//           in_errors: 100  # Allow some input errors
-//         - name: "Ethernet2/1"
-//           symbol_errors: 5
+//     interfaces:
+//
+//   - name: "Ethernet1/1"
+//     fcs_errors: 0
+//     in_errors: 100  # Allow some input errors
+//
+//   - name: "Ethernet2/1"
+//     symbol_errors: 5
 //
 //   - name: VerifyInterfaceErrors check all interfaces
 //     VerifyInterfaceErrors:
-//       check_all: true  # Check all interfaces with default thresholds (0)
+//     check_all: true  # Check all interfaces with default thresholds (0)
 type VerifyInterfaceErrors struct {
 	test.BaseTest
 	Interfaces []InterfaceErrorThresholds `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
@@ -35,14 +38,14 @@ type VerifyInterfaceErrors struct {
 }
 
 type InterfaceErrorThresholds struct {
-	Name             string `yaml:"name" json:"name"`
-	FcsErrors        int    `yaml:"fcs_errors,omitempty" json:"fcs_errors,omitempty"`
-	AlignmentErrors  int    `yaml:"alignment_errors,omitempty" json:"alignment_errors,omitempty"`
-	SymbolErrors     int    `yaml:"symbol_errors,omitempty" json:"symbol_errors,omitempty"`
-	InErrors         int    `yaml:"in_errors,omitempty" json:"in_errors,omitempty"`
-	OutErrors        int    `yaml:"out_errors,omitempty" json:"out_errors,omitempty"`
-	FrameTooShorts   int    `yaml:"frame_too_shorts,omitempty" json:"frame_too_shorts,omitempty"`
-	FrameTooLongs    int    `yaml:"frame_too_longs,omitempty" json:"frame_too_longs,omitempty"`
+	Name            string `yaml:"name" json:"name"`
+	FcsErrors       int    `yaml:"fcs_errors,omitempty" json:"fcs_errors,omitempty"`
+	AlignmentErrors int    `yaml:"alignment_errors,omitempty" json:"alignment_errors,omitempty"`
+	SymbolErrors    int    `yaml:"symbol_errors,omitempty" json:"symbol_errors,omitempty"`
+	InErrors        int    `yaml:"in_errors,omitempty" json:"in_errors,omitempty"`
+	OutErrors       int    `yaml:"out_errors,omitempty" json:"out_errors,omitempty"`
+	FrameTooShorts  int    `yaml:"frame_too_shorts,omitempty" json:"frame_too_shorts,omitempty"`
+	FrameTooLongs   int    `yaml:"frame_too_longs,omitempty" json:"frame_too_longs,omitempty"`
 }
 
 func NewVerifyInterfaceErrors(inputs map[string]any) (test.Test, error) {

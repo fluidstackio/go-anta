@@ -48,4 +48,3 @@ func SkipOnVirtualPlatforms(dev device.Device, testName string, categories []str
 		Message:    fmt.Sprintf("Test skipped: %s (platform: %s)", reason, dev.HardwareModel()),
 	}
 }
-

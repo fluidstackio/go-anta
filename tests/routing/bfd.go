@@ -17,10 +17,10 @@ import (
 // Note: Seamless BFD (S-BFD) is not supported in this test.
 //
 // The test performs the following checks:
-//   1. Retrieves BFD peer information from the device.
-//   2. Verifies that each specified peer exists in the configuration.
-//   3. Validates that the peer status is "up".
-//   4. Confirms that the remote discriminator is non-zero.
+//  1. Retrieves BFD peer information from the device.
+//  2. Verifies that each specified peer exists in the configuration.
+//  3. Validates that the peer status is "up".
+//  4. Confirms that the remote discriminator is non-zero.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified BFD peers are up with valid discriminators.
@@ -28,20 +28,24 @@ import (
 //   - Error: The test will report an error if BFD peer information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyBFDSpecificPeers with interface
 //     VerifyBFDSpecificPeers:
-//       peers:
-//         - peer_address: "192.168.1.1"
-//           vrf: "default"
-//           interface: "Ethernet1"
-//         - peer_address: "192.168.1.2"
-//           vrf: "MGMT"
+//     peers:
+//
+//   - peer_address: "192.168.1.1"
+//     vrf: "default"
+//     interface: "Ethernet1"
+//
+//   - peer_address: "192.168.1.2"
+//     vrf: "MGMT"
 //
 //   - name: VerifyBFDSpecificPeers minimal config
 //     VerifyBFDSpecificPeers:
-//       peers:
-//         - peer_address: "10.1.1.1"
-//           vrf: "default"
+//     peers:
+//
+//   - peer_address: "10.1.1.1"
+//     vrf: "default"
 type VerifyBFDSpecificPeers struct {
 	test.BaseTest
 	Peers []BFDPeer `yaml:"peers" json:"peers"`
@@ -199,10 +203,10 @@ func (t *VerifyBFDSpecificPeers) ValidateInput(input any) error {
 // receive intervals, and multiplier settings for proper session timing.
 //
 // The test performs the following checks:
-//   1. Retrieves detailed BFD peer information from the device.
-//   2. Verifies that each specified peer exists and is operational.
-//   3. Validates transmit and receive interval configurations.
-//   4. Confirms multiplier settings match expectations.
+//  1. Retrieves detailed BFD peer information from the device.
+//  2. Verifies that each specified peer exists and is operational.
+//  3. Validates transmit and receive interval configurations.
+//  4. Confirms multiplier settings match expectations.
 //
 // Expected Results:
 //   - Success: The test will pass if all BFD peers have correct timer configurations.
@@ -210,28 +214,32 @@ func (t *VerifyBFDSpecificPeers) ValidateInput(input any) error {
 //   - Error: The test will report an error if BFD peer details cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyBFDPeersIntervals with specific timers
 //     VerifyBFDPeersIntervals:
-//       peers:
-//         - peer_address: "192.168.1.1"
-//           vrf: "default"
-//           tx_interval: 300
-//           rx_interval: 300
-//           multiplier: 3
-//         - peer_address: "192.168.1.2"
-//           vrf: "MGMT"
-//           tx_interval: 1000
-//           rx_interval: 1000
-//           multiplier: 5
+//     peers:
+//
+//   - peer_address: "192.168.1.1"
+//     vrf: "default"
+//     tx_interval: 300
+//     rx_interval: 300
+//     multiplier: 3
+//
+//   - peer_address: "192.168.1.2"
+//     vrf: "MGMT"
+//     tx_interval: 1000
+//     rx_interval: 1000
+//     multiplier: 5
 //
 //   - name: VerifyBFDPeersIntervals basic check
 //     VerifyBFDPeersIntervals:
-//       peers:
-//         - peer_address: "10.1.1.1"
-//           vrf: "default"
-//           tx_interval: 300
-//           rx_interval: 300
-//           multiplier: 3
+//     peers:
+//
+//   - peer_address: "10.1.1.1"
+//     vrf: "default"
+//     tx_interval: 300
+//     rx_interval: 300
+//     multiplier: 3
 type VerifyBFDPeersIntervals struct {
 	test.BaseTest
 	Peers []BFDPeerInterval `yaml:"peers" json:"peers"`
@@ -406,10 +414,10 @@ func (t *VerifyBFDPeersIntervals) ValidateInput(input any) error {
 // optionally checking for downtime thresholds and validating session health indicators.
 //
 // The test performs the following checks:
-//   1. Retrieves all BFD peer information across all VRFs.
-//   2. Validates that peers are in "up" state.
-//   3. Confirms non-zero remote discriminators.
-//   4. Optionally checks downtime threshold if specified.
+//  1. Retrieves all BFD peer information across all VRFs.
+//  2. Validates that peers are in "up" state.
+//  3. Confirms non-zero remote discriminators.
+//  4. Optionally checks downtime threshold if specified.
 //
 // Expected Results:
 //   - Success: The test will pass if all BFD peers are healthy and meet criteria.
@@ -417,16 +425,17 @@ func (t *VerifyBFDPeersIntervals) ValidateInput(input any) error {
 //   - Error: The test will report an error if BFD peer information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyBFDPeersHealth basic check
 //     VerifyBFDPeersHealth: {}
 //
 //   - name: VerifyBFDPeersHealth with downtime threshold
 //     VerifyBFDPeersHealth:
-//       down_threshold: 300  # 5 minutes in seconds
+//     down_threshold: 300  # 5 minutes in seconds
 //
 //   - name: VerifyBFDPeersHealth comprehensive
 //     VerifyBFDPeersHealth:
-//       down_threshold: 60   # 1 minute in seconds
+//     down_threshold: 60   # 1 minute in seconds
 type VerifyBFDPeersHealth struct {
 	test.BaseTest
 	DownThreshold *int `yaml:"down_threshold,omitempty" json:"down_threshold,omitempty"`
@@ -552,9 +561,9 @@ func (t *VerifyBFDPeersHealth) ValidateInput(input any) error {
 // for fast failure detection.
 //
 // The test performs the following checks:
-//   1. Retrieves detailed BFD peer information including registered protocols.
-//   2. Verifies that each specified peer exists and is operational.
-//   3. Validates that expected protocols are registered with each peer.
+//  1. Retrieves detailed BFD peer information including registered protocols.
+//  2. Verifies that each specified peer exists and is operational.
+//  3. Validates that expected protocols are registered with each peer.
 //
 // Expected Results:
 //   - Success: The test will pass if all BFD peers have correct protocol registrations.
@@ -562,26 +571,34 @@ func (t *VerifyBFDPeersHealth) ValidateInput(input any) error {
 //   - Error: The test will report an error if BFD peer details cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyBFDPeersRegProtocols BGP sessions
 //     VerifyBFDPeersRegProtocols:
-//       peers:
-//         - peer_address: "192.168.1.1"
-//           vrf: "default"
-//           protocols:
-//             - "bgp"
-//         - peer_address: "192.168.1.2"
-//           vrf: "MGMT"
-//           protocols:
-//             - "ospf"
-//             - "isis"
+//     peers:
+//
+//   - peer_address: "192.168.1.1"
+//     vrf: "default"
+//     protocols:
+//
+//   - "bgp"
+//
+//   - peer_address: "192.168.1.2"
+//     vrf: "MGMT"
+//     protocols:
+//
+//   - "ospf"
+//
+//   - "isis"
 //
 //   - name: VerifyBFDPeersRegProtocols OSPF only
 //     VerifyBFDPeersRegProtocols:
-//       peers:
-//         - peer_address: "10.1.1.1"
-//           vrf: "default"
-//           protocols:
-//             - "ospf"
+//     peers:
+//
+//   - peer_address: "10.1.1.1"
+//     vrf: "default"
+//     protocols:
+//
+//   - "ospf"
 type VerifyBFDPeersRegProtocols struct {
 	test.BaseTest
 	Peers []BFDPeerProtocol `yaml:"peers" json:"peers"`

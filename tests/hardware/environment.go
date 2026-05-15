@@ -17,9 +17,9 @@ import (
 // Proper cooling is critical for device reliability and performance.
 //
 // The test performs the following checks:
-//   1. Retrieves the system cooling status from the device.
-//   2. Validates that the cooling status indicates proper operation.
-//   3. Reports any cooling system failures or warnings.
+//  1. Retrieves the system cooling status from the device.
+//  2. Validates that the cooling status indicates proper operation.
+//  3. Reports any cooling system failures or warnings.
 //
 // Expected Results:
 //   - Success: System cooling status is "ok" or equivalent healthy state.
@@ -27,12 +27,13 @@ import (
 //   - Error: Unable to retrieve system cooling status.
 //
 // Examples:
+//
 //   - name: VerifyEnvironmentSystemCooling basic check
 //     VerifyEnvironmentSystemCooling: {}
 //
 //   - name: VerifyEnvironmentSystemCooling comprehensive validation
 //     VerifyEnvironmentSystemCooling:
-//       # No parameters needed - validates overall cooling status
+//     # No parameters needed - validates overall cooling status
 type VerifyEnvironmentSystemCooling struct {
 	test.BaseTest
 }
@@ -108,10 +109,10 @@ func (t *VerifyEnvironmentSystemCooling) ValidateInput(input any) error {
 // maintaining device temperatures within acceptable limits.
 //
 // The test performs the following checks:
-//   1. Retrieves status for all power supply fans and fan trays.
-//   2. Validates that all fans are operational and within speed tolerances.
-//   3. Checks for any fan failures or performance warnings.
-//   4. Optionally validates fan speeds against expected ranges.
+//  1. Retrieves status for all power supply fans and fan trays.
+//  2. Validates that all fans are operational and within speed tolerances.
+//  3. Checks for any fan failures or performance warnings.
+//  4. Optionally validates fan speeds against expected ranges.
 //
 // Expected Results:
 //   - Success: All fans are operational and within acceptable speed ranges.
@@ -119,17 +120,18 @@ func (t *VerifyEnvironmentSystemCooling) ValidateInput(input any) error {
 //   - Error: Unable to retrieve fan status or performance data.
 //
 // Examples:
+//
 //   - name: VerifyEnvironmentCooling basic check
 //     VerifyEnvironmentCooling: {}
 //
 //   - name: VerifyEnvironmentCooling with speed validation
 //     VerifyEnvironmentCooling:
-//       check_fan_speed: true
-//       min_fan_speed_pct: 30  # Minimum acceptable fan speed percentage
+//     check_fan_speed: true
+//     min_fan_speed_pct: 30  # Minimum acceptable fan speed percentage
 type VerifyEnvironmentCooling struct {
 	test.BaseTest
-	CheckFanSpeed   bool `yaml:"check_fan_speed,omitempty" json:"check_fan_speed,omitempty"`
-	MinFanSpeedPct  int  `yaml:"min_fan_speed_pct,omitempty" json:"min_fan_speed_pct,omitempty"`
+	CheckFanSpeed  bool `yaml:"check_fan_speed,omitempty" json:"check_fan_speed,omitempty"`
+	MinFanSpeedPct int  `yaml:"min_fan_speed_pct,omitempty" json:"min_fan_speed_pct,omitempty"`
 }
 
 func NewVerifyEnvironmentCooling(inputs map[string]any) (test.Test, error) {
@@ -288,10 +290,10 @@ func (t *VerifyEnvironmentCooling) ValidateInput(input any) error {
 // redundancy and voltage stability are critical for device reliability.
 //
 // The test performs the following checks:
-//   1. Retrieves status for all power supply units (PSUs).
-//   2. Validates that PSUs are operational and providing stable power.
-//   3. Checks input voltages against acceptable ranges.
-//   4. Verifies power supply redundancy if configured.
+//  1. Retrieves status for all power supply units (PSUs).
+//  2. Validates that PSUs are operational and providing stable power.
+//  3. Checks input voltages against acceptable ranges.
+//  4. Verifies power supply redundancy if configured.
 //
 // Expected Results:
 //   - Success: All power supplies are operational with stable voltages.
@@ -299,19 +301,20 @@ func (t *VerifyEnvironmentCooling) ValidateInput(input any) error {
 //   - Error: Unable to retrieve power supply status or voltage data.
 //
 // Examples:
+//
 //   - name: VerifyEnvironmentPower basic check
 //     VerifyEnvironmentPower: {}
 //
 //   - name: VerifyEnvironmentPower with voltage validation
 //     VerifyEnvironmentPower:
-//       check_voltage: true
-//       min_input_voltage: 100  # Minimum acceptable input voltage
-//       max_input_voltage: 250  # Maximum acceptable input voltage
+//     check_voltage: true
+//     min_input_voltage: 100  # Minimum acceptable input voltage
+//     max_input_voltage: 250  # Maximum acceptable input voltage
 type VerifyEnvironmentPower struct {
 	test.BaseTest
-	CheckVoltage     bool    `yaml:"check_voltage,omitempty" json:"check_voltage,omitempty"`
-	MinInputVoltage  float64 `yaml:"min_input_voltage,omitempty" json:"min_input_voltage,omitempty"`
-	MaxInputVoltage  float64 `yaml:"max_input_voltage,omitempty" json:"max_input_voltage,omitempty"`
+	CheckVoltage    bool    `yaml:"check_voltage,omitempty" json:"check_voltage,omitempty"`
+	MinInputVoltage float64 `yaml:"min_input_voltage,omitempty" json:"min_input_voltage,omitempty"`
+	MaxInputVoltage float64 `yaml:"max_input_voltage,omitempty" json:"max_input_voltage,omitempty"`
 }
 
 func NewVerifyEnvironmentPower(inputs map[string]any) (test.Test, error) {

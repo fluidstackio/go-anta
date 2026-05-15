@@ -93,14 +93,15 @@ func (t *VerifySSHStatus) ValidateInput(input any) error {
 //   - Error: The test will report an error if SSH IPv4 ACL information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifySSHIPv4Acl with specific count
 //     VerifySSHIPv4Acl:
-//       number: 3
-//       vrf: "default"
+//     number: 3
+//     vrf: "default"
 //
 //   - name: VerifySSHIPv4Acl with default VRF
 //     VerifySSHIPv4Acl:
-//       number: 2
+//     number: 2
 type VerifySSHIPv4Acl struct {
 	test.BaseTest
 	Number int    `yaml:"number" json:"number"`
@@ -204,8 +205,8 @@ func (t *VerifySSHIPv4Acl) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifySSHIPv6Acl with specific count
 //     VerifySSHIPv6Acl:
-//       number: 2
-//       vrf: "default"
+//     number: 2
+//     vrf: "default"
 type VerifySSHIPv6Acl struct {
 	test.BaseTest
 	Number int    `yaml:"number" json:"number"`
@@ -458,7 +459,7 @@ func (t *VerifyAPIHttpStatus) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyAPIHttpsSSL with custom profile
 //     VerifyAPIHttpsSSL:
-//       profile: "mySSLProfile"
+//     profile: "mySSLProfile"
 type VerifyAPIHttpsSSL struct {
 	test.BaseTest
 	Profile string `yaml:"profile" json:"profile"`
@@ -543,8 +544,8 @@ func (t *VerifyAPIHttpsSSL) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyAPIIPv4Acl with specific count
 //     VerifyAPIIPv4Acl:
-//       number: 2
-//       vrf: "default"
+//     number: 2
+//     vrf: "default"
 type VerifyAPIIPv4Acl struct {
 	test.BaseTest
 	Number int    `yaml:"number" json:"number"`
@@ -648,8 +649,8 @@ func (t *VerifyAPIIPv4Acl) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyAPIIPv6Acl with specific count
 //     VerifyAPIIPv6Acl:
-//       number: 1
-//       vrf: "default"
+//     number: 1
+//     vrf: "default"
 type VerifyAPIIPv6Acl struct {
 	test.BaseTest
 	Number int    `yaml:"number" json:"number"`

@@ -105,13 +105,13 @@ func runInventory(cmd *cobra.Command, args []string) error {
 	switch invFormat {
 	case "count":
 		fmt.Printf("%d\n", len(inv.Devices))
-		
+
 	case "json":
 		return outputJSON(inv)
-		
+
 	case "yaml":
 		return outputYAML(inv)
-		
+
 	default: // table
 		return outputTable(inv)
 	}
@@ -180,7 +180,7 @@ func outputTable(inv *inventory.Inventory) error {
 				tagCount[tag]++
 			}
 		}
-		
+
 		if len(tagCount) > 0 {
 			fmt.Fprintln(w, "\nTag Summary:")
 			for tag, count := range tagCount {
@@ -257,4 +257,3 @@ func formatExtra(extra map[string]string) string {
 	}
 	return strings.Join(parts, ", ")
 }
-

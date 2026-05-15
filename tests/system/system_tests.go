@@ -19,15 +19,18 @@ import (
 //   - Error: The test will report an error if the device version cannot be determined.
 //
 // Examples:
+//
 //   - name: VerifyEOSVersion with allowed versions
 //     VerifyEOSVersion:
-//       versions:
-//         - "4.28.1F"
-//         - "4.28.2F"
+//     versions:
+//
+//   - "4.28.1F"
+//
+//   - "4.28.2F"
 //
 //   - name: VerifyEOSVersion with minimum version
 //     VerifyEOSVersion:
-//       minimum_version: "4.28.0F"
+//     minimum_version: "4.28.0F"
 type VerifyEOSVersion struct {
 	test.BaseTest
 	MinimumVersion string   `yaml:"minimum_version,omitempty" json:"minimum_version,omitempty"`
@@ -173,13 +176,14 @@ func parseVersion(version string) []int {
 //   - Error: The test will report an error if the device uptime cannot be determined.
 //
 // Examples:
+//
 //   - name: VerifyUptime with 1 day minimum
 //     VerifyUptime:
-//       minimum_uptime: 86400  # 24 hours in seconds
+//     minimum_uptime: 86400  # 24 hours in seconds
 //
 //   - name: VerifyUptime with 1 hour minimum
 //     VerifyUptime:
-//       minimum_uptime: 3600   # 1 hour in seconds (default)
+//     minimum_uptime: 3600   # 1 hour in seconds (default)
 type VerifyUptime struct {
 	test.BaseTest
 	MinimumUptime int64 `yaml:"minimum_uptime" json:"minimum_uptime"`
@@ -277,12 +281,12 @@ func (t *VerifyUptime) ValidateInput(input any) error {
 // Examples:
 //   - name: VerifyNTP with specific servers
 //     VerifyNTP:
-//       servers:
-//         - server: "pool.ntp.org"
-//           synchronized: true
-//           stratum: 2
-//         - server: "time.google.com"
-//           synchronized: true
+//     servers:
+//   - server: "pool.ntp.org"
+//     synchronized: true
+//     stratum: 2
+//   - server: "time.google.com"
+//     synchronized: true
 type VerifyNTP struct {
 	test.BaseTest
 	Servers []NTPServer `yaml:"servers" json:"servers"`
@@ -456,19 +460,25 @@ func (t *VerifyNTP) ValidateInput(input any) error {
 //   - Error: The test will report an error if DNS configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyDNSResolution with servers and FQDNs
 //     VerifyDNSResolution:
-//       servers:
-//         - "8.8.8.8"
-//         - "8.8.4.4"
-//       fqdn:
-//         - "www.google.com"
-//         - "www.arista.com"
+//     servers:
+//
+//   - "8.8.8.8"
+//
+//   - "8.8.4.4"
+//     fqdn:
+//
+//   - "www.google.com"
+//
+//   - "www.arista.com"
 //
 //   - name: VerifyDNSResolution with FQDNs only
 //     VerifyDNSResolution:
-//       fqdn:
-//         - "github.com"
+//     fqdn:
+//
+//   - "github.com"
 type VerifyDNSResolution struct {
 	test.BaseTest
 	Servers []string `yaml:"servers" json:"servers"`
@@ -620,12 +630,16 @@ func (t *VerifyDNSResolution) ValidateInput(input any) error {
 //   - Error: The test will report an error if the reload cause cannot be determined.
 //
 // Examples:
+//
 //   - name: VerifyReloadCause with allowed causes
 //     VerifyReloadCause:
-//       allowed_causes:
-//         - "USER"
-//         - "FPGA"
-//         - "ZTP"
+//     allowed_causes:
+//
+//   - "USER"
+//
+//   - "FPGA"
+//
+//   - "ZTP"
 //
 //   - name: VerifyReloadCause with default causes
 //     VerifyReloadCause:  # Uses default allowed causes: USER, FPGA
@@ -1280,13 +1294,14 @@ func (t *VerifyFileSystemUtilization) ValidateInput(input any) error {
 //   - Error: The test will report an error if flash storage information cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyFlashUtilization with default threshold
 //     VerifyFlashUtilization:
 //
 //   - name: VerifyFlashUtilization with custom threshold and peer check
 //     VerifyFlashUtilization:
-//       max_utilization: 80.0
-//       check_peer_supervisor: true
+//     max_utilization: 80.0
+//     check_peer_supervisor: true
 type VerifyFlashUtilization struct {
 	test.BaseTest
 	MaxUtilization      float64 `yaml:"max_utilization,omitempty" json:"max_utilization,omitempty"`

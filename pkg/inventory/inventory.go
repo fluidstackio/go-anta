@@ -278,7 +278,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 		for _, hostname := range hostnames {
 			hostnameSet[strings.TrimSpace(hostname)] = true
 		}
-		
+
 		for _, dev := range i.Devices {
 			if hostnameSet[dev.Name] {
 				filtered.Devices = append(filtered.Devices, dev)
@@ -322,7 +322,7 @@ func (i *Inventory) FilterByLimit(limitPattern string) *Inventory {
 			}
 			return filtered
 		}
-		
+
 		// Treat as exact hostname match
 		for _, dev := range i.Devices {
 			if dev.Name == limitPattern {

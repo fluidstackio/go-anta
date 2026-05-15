@@ -11,11 +11,11 @@ var log *logrus.Logger
 
 func init() {
 	log = logrus.New()
-	
+
 	// Set default configuration
 	log.SetOutput(os.Stdout)
 	log.SetLevel(logrus.WarnLevel) // Default to only show warnings and above
-	
+
 	// Custom formatter for better readability
 	log.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp:   true,
@@ -60,12 +60,12 @@ func SetOutput(path string) error {
 		log.SetOutput(os.Stdout)
 		return nil
 	}
-	
+
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
-	
+
 	log.SetOutput(file)
 	return nil
 }

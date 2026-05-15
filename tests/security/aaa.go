@@ -16,9 +16,9 @@ import (
 // consistent and predictable communication paths for authentication traffic.
 //
 // The test performs the following checks:
-//   1. Retrieves the TACACS configuration from the device.
-//   2. Verifies that TACACS is configured for the specified VRF.
-//   3. Validates that the specified interface is set as the source interface.
+//  1. Retrieves the TACACS configuration from the device.
+//  2. Verifies that TACACS is configured for the specified VRF.
+//  3. Validates that the specified interface is set as the source interface.
 //
 // Expected Results:
 //   - Success: The test will pass if the specified interface is configured as the TACACS source in the given VRF.
@@ -26,15 +26,16 @@ import (
 //   - Error: The test will report an error if TACACS configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyTacacsSourceIntf management interface
 //     VerifyTacacsSourceIntf:
-//       interface: "Management1"
-//       vrf: "MGMT"
+//     interface: "Management1"
+//     vrf: "MGMT"
 //
 //   - name: VerifyTacacsSourceIntf loopback
 //     VerifyTacacsSourceIntf:
-//       interface: "Loopback0"
-//       vrf: "default"
+//     interface: "Loopback0"
+//     vrf: "default"
 type VerifyTacacsSourceIntf struct {
 	test.BaseTest
 	Interface string `yaml:"interface" json:"interface"`
@@ -130,9 +131,9 @@ func (t *VerifyTacacsSourceIntf) ValidateInput(input any) error {
 // authorization, and accounting services.
 //
 // The test performs the following checks:
-//   1. Retrieves the TACACS server configuration from the device.
-//   2. Verifies that all specified servers are configured in the given VRF.
-//   3. Validates that each server is present and properly configured.
+//  1. Retrieves the TACACS server configuration from the device.
+//  2. Verifies that all specified servers are configured in the given VRF.
+//  3. Validates that each server is present and properly configured.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified servers are configured in the VRF.
@@ -140,18 +141,23 @@ func (t *VerifyTacacsSourceIntf) ValidateInput(input any) error {
 //   - Error: The test will report an error if TACACS configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyTacacsServers production servers
 //     VerifyTacacsServers:
-//       servers:
-//         - "10.1.1.10"
-//         - "10.1.1.11"
-//       vrf: "MGMT"
+//     servers:
+//
+//   - "10.1.1.10"
+//
+//   - "10.1.1.11"
+//     vrf: "MGMT"
 //
 //   - name: VerifyTacacsServers default VRF
 //     VerifyTacacsServers:
-//       servers:
-//         - "192.168.1.100"
-//         - "192.168.1.101"
+//     servers:
+//
+//   - "192.168.1.100"
+//
+//   - "192.168.1.101"
 type VerifyTacacsServers struct {
 	test.BaseTest
 	Servers []string `yaml:"servers" json:"servers"`
@@ -266,9 +272,9 @@ func (t *VerifyTacacsServers) ValidateInput(input any) error {
 // Server groups allow organizing TACACS+ servers for redundancy and load balancing.
 //
 // The test performs the following checks:
-//   1. Retrieves the TACACS server group configuration from the device.
-//   2. Verifies that all specified server groups exist.
-//   3. Validates the presence of each configured group.
+//  1. Retrieves the TACACS server group configuration from the device.
+//  2. Verifies that all specified server groups exist.
+//  3. Validates the presence of each configured group.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified server groups are configured.
@@ -276,16 +282,20 @@ func (t *VerifyTacacsServers) ValidateInput(input any) error {
 //   - Error: The test will report an error if TACACS configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyTacacsServerGroups production groups
 //     VerifyTacacsServerGroups:
-//       groups:
-//         - "TACACS_PRIMARY"
-//         - "TACACS_BACKUP"
+//     groups:
+//
+//   - "TACACS_PRIMARY"
+//
+//   - "TACACS_BACKUP"
 //
 //   - name: VerifyTacacsServerGroups single group
 //     VerifyTacacsServerGroups:
-//       groups:
-//         - "TACACS_SERVERS"
+//     groups:
+//
+//   - "TACACS_SERVERS"
 type VerifyTacacsServerGroups struct {
 	test.BaseTest
 	Groups []string `yaml:"groups" json:"groups"`
@@ -386,9 +396,9 @@ func (t *VerifyTacacsServerGroups) ValidateInput(input any) error {
 // method configuration ensures secure access control to the device.
 //
 // The test performs the following checks:
-//   1. Retrieves the AAA authentication method configuration from the device.
-//   2. Verifies that the specified methods are configured for each authentication type.
-//   3. Validates that the method order matches the expected configuration.
+//  1. Retrieves the AAA authentication method configuration from the device.
+//  2. Verifies that the specified methods are configured for each authentication type.
+//  3. Validates that the method order matches the expected configuration.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified authentication methods match the configuration.
@@ -396,23 +406,31 @@ func (t *VerifyTacacsServerGroups) ValidateInput(input any) error {
 //   - Error: The test will report an error if AAA configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyAuthenMethods complete setup
 //     VerifyAuthenMethods:
-//       login:
-//         - "group tacacs+"
-//         - "local"
-//       enable:
-//         - "group tacacs+"
-//         - "local"
-//       dot1x:
-//         - "group radius"
+//     login:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     enable:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     dot1x:
+//
+//   - "group radius"
 //
 //   - name: VerifyAuthenMethods local only
 //     VerifyAuthenMethods:
-//       login:
-//         - "local"
-//       enable:
-//         - "local"
+//     login:
+//
+//   - "local"
+//     enable:
+//
+//   - "local"
 type VerifyAuthenMethods struct {
 	test.BaseTest
 	Login  []string `yaml:"login,omitempty" json:"login,omitempty"`
@@ -552,9 +570,9 @@ func (t *VerifyAuthenMethods) ValidateInput(input any) error {
 // method configuration ensures appropriate privilege control.
 //
 // The test performs the following checks:
-//   1. Retrieves the AAA authorization method configuration from the device.
-//   2. Verifies that the specified methods are configured for each authorization type.
-//   3. Validates that the method order matches the expected configuration.
+//  1. Retrieves the AAA authorization method configuration from the device.
+//  2. Verifies that the specified methods are configured for each authorization type.
+//  3. Validates that the method order matches the expected configuration.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified authorization methods match the configuration.
@@ -562,21 +580,28 @@ func (t *VerifyAuthenMethods) ValidateInput(input any) error {
 //   - Error: The test will report an error if AAA configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyAuthzMethods complete setup
 //     VerifyAuthzMethods:
-//       commands:
-//         - "group tacacs+"
-//         - "local"
-//       exec:
-//         - "group tacacs+"
-//         - "local"
+//     commands:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     exec:
+//
+//   - "group tacacs+"
+//
+//   - "local"
 //
 //   - name: VerifyAuthzMethods local only
 //     VerifyAuthzMethods:
-//       commands:
-//         - "local"
-//       exec:
-//         - "local"
+//     commands:
+//
+//   - "local"
+//     exec:
+//
+//   - "local"
 type VerifyAuthzMethods struct {
 	test.BaseTest
 	CommandMethods []string `yaml:"commands,omitempty" json:"commands,omitempty"`
@@ -701,9 +726,9 @@ func (t *VerifyAuthzMethods) ValidateInput(input any) error {
 // Proper accounting method configuration ensures audit trail and compliance.
 //
 // The test performs the following checks:
-//   1. Retrieves the AAA accounting method configuration from the device.
-//   2. Verifies that the specified methods are configured for each accounting type.
-//   3. Validates that the method order matches the expected configuration.
+//  1. Retrieves the AAA accounting method configuration from the device.
+//  2. Verifies that the specified methods are configured for each accounting type.
+//  3. Validates that the method order matches the expected configuration.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified accounting methods match the configuration.
@@ -711,32 +736,42 @@ func (t *VerifyAuthzMethods) ValidateInput(input any) error {
 //   - Error: The test will report an error if AAA configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyAcctDefaultMethods complete setup
 //     VerifyAcctDefaultMethods:
-//       system:
-//         - "group tacacs+"
-//         - "local"
-//       exec:
-//         - "group tacacs+"
-//         - "local"
-//       commands:
-//         - "group tacacs+"
-//         - "local"
-//       dot1x:
-//         - "group radius"
+//     system:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     exec:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     commands:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     dot1x:
+//
+//   - "group radius"
 //
 //   - name: VerifyAcctDefaultMethods tacacs only
 //     VerifyAcctDefaultMethods:
-//       system:
-//         - "group tacacs+"
-//       exec:
-//         - "group tacacs+"
+//     system:
+//
+//   - "group tacacs+"
+//     exec:
+//
+//   - "group tacacs+"
 type VerifyAcctDefaultMethods struct {
 	test.BaseTest
-	SystemMethods   []string `yaml:"system,omitempty" json:"system,omitempty"`
-	ExecMethods     []string `yaml:"exec,omitempty" json:"exec,omitempty"`
-	CommandMethods  []string `yaml:"commands,omitempty" json:"commands,omitempty"`
-	Dot1xMethods    []string `yaml:"dot1x,omitempty" json:"dot1x,omitempty"`
+	SystemMethods  []string `yaml:"system,omitempty" json:"system,omitempty"`
+	ExecMethods    []string `yaml:"exec,omitempty" json:"exec,omitempty"`
+	CommandMethods []string `yaml:"commands,omitempty" json:"commands,omitempty"`
+	Dot1xMethods   []string `yaml:"dot1x,omitempty" json:"dot1x,omitempty"`
 }
 
 func NewVerifyAcctDefaultMethods(inputs map[string]any) (test.Test, error) {
@@ -885,9 +920,9 @@ func (t *VerifyAcctDefaultMethods) ValidateInput(input any) error {
 // Console accounting configuration is important for tracking local console access.
 //
 // The test performs the following checks:
-//   1. Retrieves the AAA accounting method configuration from the device.
-//   2. Verifies that the specified methods are configured for each accounting type on console.
-//   3. Validates that the method order matches the expected configuration.
+//  1. Retrieves the AAA accounting method configuration from the device.
+//  2. Verifies that the specified methods are configured for each accounting type on console.
+//  3. Validates that the method order matches the expected configuration.
 //
 // Expected Results:
 //   - Success: The test will pass if all specified accounting methods match the configuration.
@@ -895,30 +930,39 @@ func (t *VerifyAcctDefaultMethods) ValidateInput(input any) error {
 //   - Error: The test will report an error if AAA configuration cannot be retrieved.
 //
 // Examples:
+//
 //   - name: VerifyAcctConsoleMethods complete setup
 //     VerifyAcctConsoleMethods:
-//       system:
-//         - "group tacacs+"
-//         - "local"
-//       exec:
-//         - "group tacacs+"
-//         - "local"
-//       commands:
-//         - "group tacacs+"
-//         - "local"
+//     system:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     exec:
+//
+//   - "group tacacs+"
+//
+//   - "local"
+//     commands:
+//
+//   - "group tacacs+"
+//
+//   - "local"
 //
 //   - name: VerifyAcctConsoleMethods local only
 //     VerifyAcctConsoleMethods:
-//       system:
-//         - "local"
-//       exec:
-//         - "local"
+//     system:
+//
+//   - "local"
+//     exec:
+//
+//   - "local"
 type VerifyAcctConsoleMethods struct {
 	test.BaseTest
-	SystemMethods   []string `yaml:"system,omitempty" json:"system,omitempty"`
-	ExecMethods     []string `yaml:"exec,omitempty" json:"exec,omitempty"`
-	CommandMethods  []string `yaml:"commands,omitempty" json:"commands,omitempty"`
-	Dot1xMethods    []string `yaml:"dot1x,omitempty" json:"dot1x,omitempty"`
+	SystemMethods  []string `yaml:"system,omitempty" json:"system,omitempty"`
+	ExecMethods    []string `yaml:"exec,omitempty" json:"exec,omitempty"`
+	CommandMethods []string `yaml:"commands,omitempty" json:"commands,omitempty"`
+	Dot1xMethods   []string `yaml:"dot1x,omitempty" json:"dot1x,omitempty"`
 }
 
 func NewVerifyAcctConsoleMethods(inputs map[string]any) (test.Test, error) {

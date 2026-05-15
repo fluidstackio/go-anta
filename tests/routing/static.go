@@ -23,13 +23,13 @@ import (
 //   - name: "VerifyStaticRoutes"
 //     module: "routing"
 //     inputs:
-//       routes:
-//         - prefix: "192.168.1.0/24"
-//           next_hop: "10.0.0.1"
-//           vrf: "default"
-//         - prefix: "172.16.0.0/16"
-//           next_hop: "10.0.0.2"
-//           vrf: "PROD"
+//     routes:
+//   - prefix: "192.168.1.0/24"
+//     next_hop: "10.0.0.1"
+//     vrf: "default"
+//   - prefix: "172.16.0.0/16"
+//     next_hop: "10.0.0.2"
+//     vrf: "PROD"
 type VerifyStaticRoutes struct {
 	test.BaseTest
 	Routes []StaticRoute `yaml:"routes" json:"routes"`

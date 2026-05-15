@@ -24,14 +24,14 @@ import (
 //   - name: "VerifyOSPFNeighbors"
 //     module: "routing"
 //     inputs:
-//       instance: "1"
-//       neighbors:
-//         - interface: "Ethernet1"
-//           state: "Full"
-//           router_id: "192.168.1.1"
-//         - interface: "Ethernet2"
-//           state: "Full"
-//           router_id: "192.168.1.2"
+//     instance: "1"
+//     neighbors:
+//   - interface: "Ethernet1"
+//     state: "Full"
+//     router_id: "192.168.1.1"
+//   - interface: "Ethernet2"
+//     state: "Full"
+//     router_id: "192.168.1.2"
 type VerifyOSPFNeighbors struct {
 	test.BaseTest
 	Neighbors []OSPFNeighbor `yaml:"neighbors" json:"neighbors"`
@@ -122,7 +122,7 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 					for _, n := range neighbors {
 						if neighbor, ok := n.(map[string]any); ok {
 							info := OSPFNeighborInfo{}
-							
+
 							if intf, ok := neighbor["interface"].(string); ok {
 								info.Interface = intf
 							}
@@ -132,7 +132,7 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 							if routerId, ok := neighbor["routerId"].(string); ok {
 								info.RouterID = routerId
 							}
-							
+
 							if info.Interface != "" {
 								ospfNeighbors[info.Interface] = info
 							}
@@ -145,7 +145,7 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 
 	for _, expected := range t.Neighbors {
 		actual, found := ospfNeighbors[expected.Interface]
-		
+
 		if !found {
 			issues = append(issues, fmt.Sprintf("%s: no OSPF neighbor found", expected.Interface))
 			continue
@@ -153,7 +153,7 @@ func (t *VerifyOSPFNeighbors) Execute(ctx context.Context, dev device.Device) (*
 
 		expectedState := normalizeOSPFState(expected.State)
 		actualState := normalizeOSPFState(actual.State)
-		
+
 		if expectedState != actualState {
 			issues = append(issues, fmt.Sprintf("%s: expected state %s, got %s",
 				expected.Interface, expected.State, actual.State))

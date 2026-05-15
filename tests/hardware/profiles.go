@@ -21,17 +21,18 @@ import (
 //   - Error: The test will report an error if UFT mode information cannot be retrieved or parsed.
 //
 // Examples:
+//
 //   - name: VerifyUnifiedForwardingTableMode with numeric mode
 //     VerifyUnifiedForwardingTableMode:
-//       mode: 2
+//     mode: 2
 //
 //   - name: VerifyUnifiedForwardingTableMode with flexible mode
 //     VerifyUnifiedForwardingTableMode:
-//       mode: "flexible"
+//     mode: "flexible"
 //
 //   - name: VerifyUnifiedForwardingTableMode with mode 0
 //     VerifyUnifiedForwardingTableMode:
-//       mode: 0
+//     mode: 0
 type VerifyUnifiedForwardingTableMode struct {
 	test.BaseTest
 	Mode any `yaml:"mode" json:"mode"` // Can be int (0,1,2,3,4) or string ("flexible")
@@ -207,17 +208,18 @@ func (t *VerifyUnifiedForwardingTableMode) ValidateInput(input any) error {
 //   - Error: The test will report an error if TCAM profile information cannot be retrieved or parsed.
 //
 // Examples:
+//
 //   - name: VerifyTcamProfile with specific profile
 //     VerifyTcamProfile:
-//       profile: "vxlan-routing"
+//     profile: "vxlan-routing"
 //
 //   - name: VerifyTcamProfile with default profile
 //     VerifyTcamProfile:
-//       profile: "default"
+//     profile: "default"
 //
 //   - name: VerifyTcamProfile with custom profile
 //     VerifyTcamProfile:
-//       profile: "custom-acl-heavy"
+//     profile: "custom-acl-heavy"
 type VerifyTcamProfile struct {
 	test.BaseTest
 	Profile string `yaml:"profile" json:"profile"`
