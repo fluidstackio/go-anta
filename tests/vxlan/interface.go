@@ -65,40 +65,44 @@ func (t *VerifyVxlan1Interface) Execute(ctx context.Context, dev device.Device) 
 
 	issues := []string{}
 
-	if intfData, ok := cmdResult.Output.(map[string]any); ok {
-		if interfaces, ok := intfData["interfaces"].(map[string]any); ok {
-			if vxlan1, ok := interfaces["Vxlan1"].(map[string]any); ok {
-				var interfaceStatus, lineProtocol string
+	intfData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected Vxlan1 output: %v", err)
+		return result, nil
+	}
+	interfaces, ok := intfData["interfaces"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Vxlan1 output missing 'interfaces' field"
+		return result, nil
+	}
+	vxlan1, ok := interfaces["Vxlan1"].(map[string]any)
+	if !ok {
+		result.Status = test.TestFailure
+		result.Message = "Vxlan1 interface not found"
+		return result, nil
+	}
 
-				if status, ok := vxlan1["interfaceStatus"].(string); ok {
-					interfaceStatus = strings.ToLower(status)
-				}
+	var interfaceStatus, lineProtocol string
+	if status, ok := vxlan1["interfaceStatus"].(string); ok {
+		interfaceStatus = strings.ToLower(status)
+	}
+	if protocol, ok := vxlan1["lineProtocolStatus"].(string); ok {
+		lineProtocol = strings.ToLower(protocol)
+	}
 
-				if protocol, ok := vxlan1["lineProtocolStatus"].(string); ok {
-					lineProtocol = strings.ToLower(protocol)
-				}
+	if interfaceStatus != "up" && interfaceStatus != "connected" {
+		issues = append(issues, fmt.Sprintf("Vxlan1 interface status is '%s', expected 'up'", interfaceStatus))
+	}
+	if lineProtocol != "up" {
+		issues = append(issues, fmt.Sprintf("Vxlan1 line protocol status is '%s', expected 'up'", lineProtocol))
+	}
 
-				// Check interface status
-				if interfaceStatus != "up" && interfaceStatus != "connected" {
-					issues = append(issues, fmt.Sprintf("Vxlan1 interface status is '%s', expected 'up'", interfaceStatus))
-				}
-
-				// Check line protocol status
-				if lineProtocol != "up" {
-					issues = append(issues, fmt.Sprintf("Vxlan1 line protocol status is '%s', expected 'up'", lineProtocol))
-				}
-
-				if len(issues) == 0 {
-					result.Details = map[string]any{
-						"interface_status":     interfaceStatus,
-						"line_protocol_status": lineProtocol,
-					}
-				}
-			} else {
-				issues = append(issues, "Vxlan1 interface not found")
-			}
-		} else {
-			issues = append(issues, "No interfaces data found in command output")
+	if len(issues) == 0 {
+		result.Details = map[string]any{
+			"interface_status":     interfaceStatus,
+			"line_protocol_status": lineProtocol,
 		}
 	}
 

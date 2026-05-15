@@ -108,33 +108,32 @@ func (t *VerifyVlanStatus) Execute(ctx context.Context, dev device.Device) (*tes
 	issues := []string{}
 	deviceVlans := make(map[int]DeviceVlan)
 
-	if vlanData, ok := cmdResult.Output.(map[string]any); ok {
-		if vlans, ok := vlanData["vlans"].(map[string]any); ok {
-			for vlanIDStr, vlanInfo := range vlans {
-				if vlan, ok := vlanInfo.(map[string]any); ok {
-					deviceVlan := DeviceVlan{}
-
-					// Parse VLAN ID from string key
-					var vlanID int
-					fmt.Sscanf(vlanIDStr, "%d", &vlanID)
-					deviceVlan.ID = vlanID
-
-					if status, ok := vlan["status"].(string); ok {
-						deviceVlan.Status = status
-					}
-
-					if name, ok := vlan["name"].(string); ok {
-						deviceVlan.Name = name
-					}
-
-					// Handle dynamic status field
-					if dynamic, ok := vlan["dynamic"].(bool); ok {
-						deviceVlan.Dynamic = dynamic
-					}
-
-					deviceVlans[vlanID] = deviceVlan
-				}
+	vlanData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected VLAN output: %v", err)
+		return result, nil
+	}
+	if vlans, ok := vlanData["vlans"].(map[string]any); ok {
+		for vlanIDStr, vlanInfo := range vlans {
+			vlan, ok := vlanInfo.(map[string]any)
+			if !ok {
+				continue
 			}
+			deviceVlan := DeviceVlan{}
+			var vlanID int
+			fmt.Sscanf(vlanIDStr, "%d", &vlanID)
+			deviceVlan.ID = vlanID
+			if status, ok := vlan["status"].(string); ok {
+				deviceVlan.Status = status
+			}
+			if name, ok := vlan["name"].(string); ok {
+				deviceVlan.Name = name
+			}
+			if dynamic, ok := vlan["dynamic"].(bool); ok {
+				deviceVlan.Dynamic = dynamic
+			}
+			deviceVlans[vlanID] = deviceVlan
 		}
 	}
 

@@ -65,49 +65,32 @@ func (t *VerifyVxlanConfigSanity) Execute(ctx context.Context, dev device.Device
 
 	issues := []string{}
 
-	if sanityData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check overall sanity status
-		if sanityCheck, ok := sanityData["sanityCheck"].(string); ok {
-			if sanityCheck != "passed" && sanityCheck != "ok" {
-				issues = append(issues, fmt.Sprintf("VXLAN config sanity check failed: %s", sanityCheck))
+	sanityData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected VXLAN config sanity output: %v", err)
+		return result, nil
+	}
+
+	if sanityCheck, ok := sanityData["sanityCheck"].(string); ok {
+		if sanityCheck != "passed" && sanityCheck != "ok" {
+			issues = append(issues, fmt.Sprintf("VXLAN config sanity check failed: %s", sanityCheck))
+		}
+	}
+
+	for _, category := range []string{"localVtep", "mlag", "pd"} {
+		categoryData, ok := sanityData[category].(map[string]any)
+		if !ok {
+			continue
+		}
+		if status, ok := categoryData["status"].(string); ok {
+			if status != "passed" && status != "ok" {
+				issues = append(issues, fmt.Sprintf("VXLAN %s sanity check failed: %s", category, status))
 			}
 		}
-
-		// Check category-specific sanity checks
-		categories := []string{"localVtep", "mlag", "pd"}
-
-		for _, category := range categories {
-			if categoryData, ok := sanityData[category].(map[string]any); ok {
-				if status, ok := categoryData["status"].(string); ok {
-					if status != "passed" && status != "ok" {
-						issues = append(issues, fmt.Sprintf("VXLAN %s sanity check failed: %s", category, status))
-					}
-				}
-
-				// Check for specific inconsistencies
-				if inconsistencies, ok := categoryData["inconsistencies"].([]any); ok && len(inconsistencies) > 0 {
-					for _, inconsistency := range inconsistencies {
-						if inc, ok := inconsistency.(map[string]any); ok {
-							var incType, description string
-							if t, ok := inc["type"].(string); ok {
-								incType = t
-							}
-							if desc, ok := inc["description"].(string); ok {
-								description = desc
-							}
-							issues = append(issues, fmt.Sprintf("VXLAN %s inconsistency - %s: %s", category, incType, description))
-						}
-					}
-				}
-			}
-		}
-
-		// Check for general inconsistencies
-		if inconsistencies, ok := sanityData["inconsistencies"].([]any); ok && len(inconsistencies) > 0 {
+		if inconsistencies, ok := categoryData["inconsistencies"].([]any); ok && len(inconsistencies) > 0 {
 			for _, inconsistency := range inconsistencies {
-				if inc, ok := inconsistency.(string); ok {
-					issues = append(issues, fmt.Sprintf("VXLAN config inconsistency: %s", inc))
-				} else if inc, ok := inconsistency.(map[string]any); ok {
+				if inc, ok := inconsistency.(map[string]any); ok {
 					var incType, description string
 					if t, ok := inc["type"].(string); ok {
 						incType = t
@@ -115,17 +98,33 @@ func (t *VerifyVxlanConfigSanity) Execute(ctx context.Context, dev device.Device
 					if desc, ok := inc["description"].(string); ok {
 						description = desc
 					}
-					issues = append(issues, fmt.Sprintf("VXLAN inconsistency - %s: %s", incType, description))
+					issues = append(issues, fmt.Sprintf("VXLAN %s inconsistency - %s: %s", category, incType, description))
 				}
 			}
 		}
+	}
 
-		// Check for errors in the output
-		if errors, ok := sanityData["errors"].([]any); ok && len(errors) > 0 {
-			for _, errorItem := range errors {
-				if errStr, ok := errorItem.(string); ok {
-					issues = append(issues, fmt.Sprintf("VXLAN config error: %s", errStr))
+	if inconsistencies, ok := sanityData["inconsistencies"].([]any); ok && len(inconsistencies) > 0 {
+		for _, inconsistency := range inconsistencies {
+			if inc, ok := inconsistency.(string); ok {
+				issues = append(issues, fmt.Sprintf("VXLAN config inconsistency: %s", inc))
+			} else if inc, ok := inconsistency.(map[string]any); ok {
+				var incType, description string
+				if t, ok := inc["type"].(string); ok {
+					incType = t
 				}
+				if desc, ok := inc["description"].(string); ok {
+					description = desc
+				}
+				issues = append(issues, fmt.Sprintf("VXLAN inconsistency - %s: %s", incType, description))
+			}
+		}
+	}
+
+	if errors, ok := sanityData["errors"].([]any); ok && len(errors) > 0 {
+		for _, errorItem := range errors {
+			if errStr, ok := errorItem.(string); ok {
+				issues = append(issues, fmt.Sprintf("VXLAN config error: %s", errStr))
 			}
 		}
 	}

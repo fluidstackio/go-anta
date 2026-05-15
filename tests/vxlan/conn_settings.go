@@ -81,49 +81,54 @@ func (t *VerifyVxlan1ConnSettings) Execute(ctx context.Context, dev device.Devic
 
 	issues := []string{}
 
-	if intfData, ok := cmdResult.Output.(map[string]any); ok {
-		if interfaces, ok := intfData["interfaces"].(map[string]any); ok {
-			if vxlan1, ok := interfaces["Vxlan1"].(map[string]any); ok {
-				var deviceSourceIntf string
-				var deviceUdpPort int
+	intfData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected Vxlan1 output: %v", err)
+		return result, nil
+	}
+	interfaces, ok := intfData["interfaces"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Vxlan1 output missing 'interfaces' field"
+		return result, nil
+	}
+	vxlan1, ok := interfaces["Vxlan1"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Vxlan1 interface not found"
+		return result, nil
+	}
 
-				// Check source interface
-				if sourceIntf, ok := vxlan1["sourceInterface"].(string); ok {
-					deviceSourceIntf = sourceIntf
-				} else if srcIntf, ok := vxlan1["srcInterface"].(string); ok {
-					deviceSourceIntf = srcIntf
-				}
+	var deviceSourceIntf string
+	var deviceUdpPort int
 
-				// Check UDP port
-				if port, ok := vxlan1["udpPort"].(float64); ok {
-					deviceUdpPort = int(port)
-				} else if port, ok := vxlan1["port"].(float64); ok {
-					deviceUdpPort = int(port)
-				}
+	if sourceIntf, ok := vxlan1["sourceInterface"].(string); ok {
+		deviceSourceIntf = sourceIntf
+	} else if srcIntf, ok := vxlan1["srcInterface"].(string); ok {
+		deviceSourceIntf = srcIntf
+	}
 
-				// Validate source interface
-				if t.SourceInterface != "" && deviceSourceIntf != t.SourceInterface {
-					issues = append(issues, fmt.Sprintf("Vxlan1 source interface is '%s', expected '%s'",
-						deviceSourceIntf, t.SourceInterface))
-				}
+	if port, ok := vxlan1["udpPort"].(float64); ok {
+		deviceUdpPort = int(port)
+	} else if port, ok := vxlan1["port"].(float64); ok {
+		deviceUdpPort = int(port)
+	}
 
-				// Validate UDP port
-				if deviceUdpPort != t.UdpPort {
-					issues = append(issues, fmt.Sprintf("Vxlan1 UDP port is %d, expected %d",
-						deviceUdpPort, t.UdpPort))
-				}
+	if t.SourceInterface != "" && deviceSourceIntf != t.SourceInterface {
+		issues = append(issues, fmt.Sprintf("Vxlan1 source interface is '%s', expected '%s'",
+			deviceSourceIntf, t.SourceInterface))
+	}
 
-				if len(issues) == 0 {
-					result.Details = map[string]any{
-						"source_interface": deviceSourceIntf,
-						"udp_port":         deviceUdpPort,
-					}
-				}
-			} else {
-				result.Status = test.TestError
-				result.Message = "Vxlan1 interface not found"
-				return result, nil
-			}
+	if deviceUdpPort != t.UdpPort {
+		issues = append(issues, fmt.Sprintf("Vxlan1 UDP port is %d, expected %d",
+			deviceUdpPort, t.UdpPort))
+	}
+
+	if len(issues) == 0 {
+		result.Details = map[string]any{
+			"source_interface": deviceSourceIntf,
+			"udp_port":         deviceUdpPort,
 		}
 	}
 
@@ -140,8 +145,8 @@ func (t *VerifyVxlan1ConnSettings) ValidateInput(input any) error {
 		return fmt.Errorf("either source_interface or udp_port must be specified")
 	}
 
-	if t.UdpPort != 0 && (t.UdpPort < 1024 || t.UdpPort > 65335) {
-		return fmt.Errorf("udp_port must be between 1024 and 65335")
+	if t.UdpPort != 0 && (t.UdpPort < 1024 || t.UdpPort > 65535) {
+		return fmt.Errorf("udp_port must be between 1024 and 65535")
 	}
 
 	return nil

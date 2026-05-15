@@ -323,29 +323,33 @@ func (t *VerifyDNSServers) Execute(ctx context.Context, dev device.Device) (*tes
 	issues := []string{}
 	configuredServers := make(map[string]DNSServer)
 
-	if dnsData, ok := cmdResult.Output.(map[string]any); ok {
-		if servers, ok := dnsData["nameServerConfigs"].([]any); ok {
-			for _, serverData := range servers {
-				if server, ok := serverData.(map[string]any); ok {
-					var configuredServer DNSServer
-
-					if addr, ok := server["ipAddr"].(string); ok {
-						configuredServer.Server = addr
-					}
-					if vrf, ok := server["vrf"].(string); ok {
-						configuredServer.VRF = vrf
-					} else {
-						configuredServer.VRF = "default"
-					}
-					if priority, ok := server["priority"].(float64); ok {
-						configuredServer.Priority = int(priority)
-					}
-
-					if configuredServer.Server != "" {
-						key := fmt.Sprintf("%s:%s", configuredServer.Server, configuredServer.VRF)
-						configuredServers[key] = configuredServer
-					}
-				}
+	dnsData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected DNS output: %v", err)
+		return result, nil
+	}
+	if servers, ok := dnsData["nameServerConfigs"].([]any); ok {
+		for _, serverData := range servers {
+			server, ok := serverData.(map[string]any)
+			if !ok {
+				continue
+			}
+			var configuredServer DNSServer
+			if addr, ok := server["ipAddr"].(string); ok {
+				configuredServer.Server = addr
+			}
+			if vrf, ok := server["vrf"].(string); ok {
+				configuredServer.VRF = vrf
+			} else {
+				configuredServer.VRF = "default"
+			}
+			if priority, ok := server["priority"].(float64); ok {
+				configuredServer.Priority = int(priority)
+			}
+			if configuredServer.Server != "" {
+				key := fmt.Sprintf("%s:%s", configuredServer.Server, configuredServer.VRF)
+				configuredServers[key] = configuredServer
 			}
 		}
 	}
@@ -489,28 +493,31 @@ func (t *VerifyErrdisableRecovery) Execute(ctx context.Context, dev device.Devic
 	issues := []string{}
 	configuredReasons := make(map[string]ErrdisableRecovery)
 
-	if errdisableData, ok := cmdResult.Output.(map[string]any); ok {
-		if reasons, ok := errdisableData["errdisableRecoveryReasons"].(map[string]any); ok {
-			for reasonName, reasonData := range reasons {
-				if reason, ok := reasonData.(map[string]any); ok {
-					var configuredReason ErrdisableRecovery
-					configuredReason.Reason = reasonName
-
-					if enabled, ok := reason["enabled"].(bool); ok {
-						if enabled {
-							configuredReason.Status = "enabled"
-						} else {
-							configuredReason.Status = "disabled"
-						}
-					}
-
-					if interval, ok := reason["interval"].(float64); ok {
-						configuredReason.Interval = int(interval)
-					}
-
-					configuredReasons[reasonName] = configuredReason
+	errdisableData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected errdisable recovery output: %v", err)
+		return result, nil
+	}
+	if reasons, ok := errdisableData["errdisableRecoveryReasons"].(map[string]any); ok {
+		for reasonName, reasonData := range reasons {
+			reason, ok := reasonData.(map[string]any)
+			if !ok {
+				continue
+			}
+			var configuredReason ErrdisableRecovery
+			configuredReason.Reason = reasonName
+			if enabled, ok := reason["enabled"].(bool); ok {
+				if enabled {
+					configuredReason.Status = "enabled"
+				} else {
+					configuredReason.Status = "disabled"
 				}
 			}
+			if interval, ok := reason["interval"].(float64); ok {
+				configuredReason.Interval = int(interval)
+			}
+			configuredReasons[reasonName] = configuredReason
 		}
 	}
 

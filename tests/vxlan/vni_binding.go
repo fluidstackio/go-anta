@@ -80,46 +80,52 @@ func (t *VerifyVxlanVniBinding) Execute(ctx context.Context, dev device.Device) 
 	issues := []string{}
 	deviceBindings := make(map[string]any)
 
-	if intfData, ok := cmdResult.Output.(map[string]any); ok {
-		if interfaces, ok := intfData["interfaces"].(map[string]any); ok {
-			if vxlan1, ok := interfaces["Vxlan1"].(map[string]any); ok {
-				// Parse VLAN bindings
-				if vlanBindings, ok := vxlan1["vlanToVniMap"].(map[string]any); ok {
-					for vlanStr, vniData := range vlanBindings {
-						if vni, ok := vniData.(float64); ok {
-							vniStr := strconv.Itoa(int(vni))
-							vlanID, _ := strconv.Atoi(vlanStr)
-							deviceBindings[vniStr] = vlanID
-						}
-					}
-				}
+	intfData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected Vxlan1 output: %v", err)
+		return result, nil
+	}
+	interfaces, ok := intfData["interfaces"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Vxlan1 output missing 'interfaces' field"
+		return result, nil
+	}
+	vxlan1, ok := interfaces["Vxlan1"].(map[string]any)
+	if !ok {
+		result.Status = test.TestError
+		result.Message = "Vxlan1 interface not found"
+		return result, nil
+	}
 
-				// Parse VRF bindings
-				if vrfBindings, ok := vxlan1["vrfToVniMap"].(map[string]any); ok {
-					for vrfName, vniData := range vrfBindings {
-						if vni, ok := vniData.(float64); ok {
-							vniStr := strconv.Itoa(int(vni))
-							deviceBindings[vniStr] = vrfName
-						}
-					}
-				}
+	if vlanBindings, ok := vxlan1["vlanToVniMap"].(map[string]any); ok {
+		for vlanStr, vniData := range vlanBindings {
+			if vni, ok := vniData.(float64); ok {
+				vniStr := strconv.Itoa(int(vni))
+				vlanID, _ := strconv.Atoi(vlanStr)
+				deviceBindings[vniStr] = vlanID
+			}
+		}
+	}
 
-				// Alternative structure - check vniBindings
-				if vniBindings, ok := vxlan1["vniBindings"].(map[string]any); ok {
-					for vniStr, bindingData := range vniBindings {
-						if binding, ok := bindingData.(map[string]any); ok {
-							if vlanID, ok := binding["vlan"].(float64); ok {
-								deviceBindings[vniStr] = int(vlanID)
-							} else if vrfName, ok := binding["vrf"].(string); ok {
-								deviceBindings[vniStr] = vrfName
-							}
-						}
-					}
+	if vrfBindings, ok := vxlan1["vrfToVniMap"].(map[string]any); ok {
+		for vrfName, vniData := range vrfBindings {
+			if vni, ok := vniData.(float64); ok {
+				vniStr := strconv.Itoa(int(vni))
+				deviceBindings[vniStr] = vrfName
+			}
+		}
+	}
+
+	if vniBindings, ok := vxlan1["vniBindings"].(map[string]any); ok {
+		for vniStr, bindingData := range vniBindings {
+			if binding, ok := bindingData.(map[string]any); ok {
+				if vlanID, ok := binding["vlan"].(float64); ok {
+					deviceBindings[vniStr] = int(vlanID)
+				} else if vrfName, ok := binding["vrf"].(string); ok {
+					deviceBindings[vniStr] = vrfName
 				}
-			} else {
-				result.Status = test.TestError
-				result.Message = "Vxlan1 interface not found"
-				return result, nil
 			}
 		}
 	}

@@ -74,7 +74,13 @@ func (t *VerifyZeroTouch) Execute(ctx context.Context, dev device.Device) (*test
 	var zeroTouchEnabled bool
 	var zeroTouchMode string
 
-	if data, ok := cmdResult.Output.(map[string]any); ok {
+	data, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected ZeroTouch output: %v", err)
+		return result, nil
+	}
+	{
 		// Check for different possible response formats
 		if mode, ok := data["mode"].(string); ok {
 			zeroTouchMode = mode

@@ -125,57 +125,65 @@ func (t *VerifyStaticRoutes) Execute(ctx context.Context, dev device.Device) (*t
 			return result, nil
 		}
 
-		if routeData, ok := cmdResult.Output.(map[string]any); ok {
-			if vrfs, ok := routeData["vrfs"].(map[string]any); ok {
-				vrfData, vrfExists := vrfs[vrfName]
-				if !vrfExists {
-					issues = append(issues, fmt.Sprintf("VRF %s not found", vrfName))
+		routeData, err := test.AsMap(cmdResult.Output)
+		if err != nil {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Unexpected route output for VRF %s: %v", vrfName, err)
+			return result, nil
+		}
+		vrfs, ok := routeData["vrfs"].(map[string]any)
+		if !ok {
+			result.Status = test.TestError
+			result.Message = fmt.Sprintf("Route output for VRF %s missing 'vrfs' field", vrfName)
+			return result, nil
+		}
+		vrfRaw, vrfExists := vrfs[vrfName]
+		if !vrfExists {
+			issues = append(issues, fmt.Sprintf("VRF %s not found", vrfName))
+			continue
+		}
+		vrf, ok := vrfRaw.(map[string]any)
+		if !ok {
+			issues = append(issues, fmt.Sprintf("VRF %s data malformed", vrfName))
+			continue
+		}
+		vrfRoutes, _ := vrf["routes"].(map[string]any)
+
+		for _, expectedRoute := range routes {
+			routeRaw, routeExists := vrfRoutes[expectedRoute.Prefix]
+			if !routeExists {
+				issues = append(issues, fmt.Sprintf("Route %s not found in VRF %s",
+					expectedRoute.Prefix, vrfName))
+				continue
+			}
+			route, ok := routeRaw.(map[string]any)
+			if !ok {
+				issues = append(issues, fmt.Sprintf("Route %s in VRF %s: malformed entry",
+					expectedRoute.Prefix, vrfName))
+				continue
+			}
+
+			if routeType, ok := route["routeType"].(string); ok && routeType != "static" {
+				issues = append(issues, fmt.Sprintf("Route %s is not static (type: %s)",
+					expectedRoute.Prefix, routeType))
+				continue
+			}
+
+			vias, _ := route["vias"].([]any)
+			found := false
+			for _, via := range vias {
+				viaData, ok := via.(map[string]any)
+				if !ok {
 					continue
 				}
-
-				if vrf, ok := vrfData.(map[string]any); ok {
-					if vrfRoutes, ok := vrf["routes"].(map[string]any); ok {
-						// Check each expected route in this VRF
-						for _, expectedRoute := range routes {
-							routeData, routeExists := vrfRoutes[expectedRoute.Prefix]
-							if !routeExists {
-								issues = append(issues, fmt.Sprintf("Route %s not found in VRF %s",
-									expectedRoute.Prefix, vrfName))
-								continue
-							}
-
-							if route, ok := routeData.(map[string]any); ok {
-								found := false
-
-								if routeType, ok := route["routeType"].(string); ok {
-									if routeType != "static" {
-										issues = append(issues, fmt.Sprintf("Route %s is not static (type: %s)",
-											expectedRoute.Prefix, routeType))
-										continue
-									}
-								}
-
-								if vias, ok := route["vias"].([]any); ok {
-									for _, via := range vias {
-										if viaData, ok := via.(map[string]any); ok {
-											if nexthopAddr, ok := viaData["nexthopAddr"].(string); ok {
-												if nexthopAddr == expectedRoute.NextHop {
-													found = true
-													break
-												}
-											}
-										}
-									}
-								}
-
-								if !found {
-									issues = append(issues, fmt.Sprintf("Route %s: next-hop %s not found",
-										expectedRoute.Prefix, expectedRoute.NextHop))
-								}
-							}
-						}
-					}
+				if nexthopAddr, _ := viaData["nexthopAddr"].(string); nexthopAddr == expectedRoute.NextHop {
+					found = true
+					break
 				}
+			}
+			if !found {
+				issues = append(issues, fmt.Sprintf("Route %s: next-hop %s not found",
+					expectedRoute.Prefix, expectedRoute.NextHop))
 			}
 		}
 	}
