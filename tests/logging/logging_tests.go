@@ -62,32 +62,30 @@ func (t *VerifySyslogLogging) Execute(ctx context.Context, dev device.Device) (*
 
 	issues := []string{}
 
-	if loggingData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check if syslog is enabled
-		syslogEnabled := false
+	loggingData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected logging output: %v", err)
+		return result, nil
+	}
 
-		if syslogConfig, ok := loggingData["syslogEnabled"].(bool); ok {
-			syslogEnabled = syslogConfig
-		} else if syslogConfig, ok := loggingData["syslog"].(map[string]any); ok {
-			if enabled, ok := syslogConfig["enabled"].(bool); ok {
-				syslogEnabled = enabled
-			}
+	syslogEnabled := false
+	if syslogConfig, ok := loggingData["syslogEnabled"].(bool); ok {
+		syslogEnabled = syslogConfig
+	} else if syslogConfig, ok := loggingData["syslog"].(map[string]any); ok {
+		if enabled, ok := syslogConfig["enabled"].(bool); ok {
+			syslogEnabled = enabled
 		}
-
-		// Alternative check - look for syslog servers or configuration
-		if !syslogEnabled {
-			if syslogServers, ok := loggingData["syslogServers"].([]any); ok && len(syslogServers) > 0 {
-				syslogEnabled = true
-			} else if hosts, ok := loggingData["hosts"].(map[string]any); ok && len(hosts) > 0 {
-				syslogEnabled = true
-			}
+	}
+	if !syslogEnabled {
+		if syslogServers, ok := loggingData["syslogServers"].([]any); ok && len(syslogServers) > 0 {
+			syslogEnabled = true
+		} else if hosts, ok := loggingData["hosts"].(map[string]any); ok && len(hosts) > 0 {
+			syslogEnabled = true
 		}
-
-		if !syslogEnabled {
-			issues = append(issues, "Syslog logging is not enabled")
-		}
-	} else {
-		issues = append(issues, "Could not parse logging configuration")
+	}
+	if !syslogEnabled {
+		issues = append(issues, "Syslog logging is not enabled")
 	}
 
 	if len(issues) > 0 {
@@ -151,32 +149,30 @@ func (t *VerifyLoggingPersistent) Execute(ctx context.Context, dev device.Device
 
 	issues := []string{}
 
-	if loggingData, ok := cmdResult.Output.(map[string]any); ok {
-		persistentEnabled := false
+	loggingData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected logging output: %v", err)
+		return result, nil
+	}
 
-		// Check for persistent logging configuration
-		if persistent, ok := loggingData["persistent"].(map[string]any); ok {
-			if enabled, ok := persistent["enabled"].(bool); ok {
-				persistentEnabled = enabled
-			}
-
-			// Check if logs are saved to flash
-			if persistentEnabled {
-				if location, ok := persistent["location"].(string); ok {
-					if location != "flash" && location != "/mnt/flash" {
-						issues = append(issues, fmt.Sprintf("Persistent logging location is '%s', expected 'flash'", location))
-					}
+	persistentEnabled := false
+	if persistent, ok := loggingData["persistent"].(map[string]any); ok {
+		if enabled, ok := persistent["enabled"].(bool); ok {
+			persistentEnabled = enabled
+		}
+		if persistentEnabled {
+			if location, ok := persistent["location"].(string); ok {
+				if location != "flash" && location != "/mnt/flash" {
+					issues = append(issues, fmt.Sprintf("Persistent logging location is '%s', expected 'flash'", location))
 				}
 			}
-		} else if persistentConfig, ok := loggingData["persistentLogging"].(bool); ok {
-			persistentEnabled = persistentConfig
 		}
-
-		if !persistentEnabled {
-			issues = append(issues, "Persistent logging is not enabled")
-		}
-	} else {
-		issues = append(issues, "Could not parse logging configuration")
+	} else if persistentConfig, ok := loggingData["persistentLogging"].(bool); ok {
+		persistentEnabled = persistentConfig
+	}
+	if !persistentEnabled {
+		issues = append(issues, "Persistent logging is not enabled")
 	}
 
 	if len(issues) > 0 {
@@ -258,13 +254,29 @@ func (t *VerifyLoggingSourceIntf) Execute(ctx context.Context, dev device.Device
 
 	issues := []string{}
 
-	if loggingData, ok := cmdResult.Output.(map[string]any); ok {
-		found := false
+	loggingData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected logging output: %v", err)
+		return result, nil
+	}
 
-		// Check source interface configuration
-		if sourceIntf, ok := loggingData["sourceInterface"].(map[string]any); ok {
-			if vrfData, ok := sourceIntf[t.VRF].(map[string]any); ok {
-				if configuredIntf, ok := vrfData["interface"].(string); ok {
+	found := false
+	if sourceIntf, ok := loggingData["sourceInterface"].(map[string]any); ok {
+		if vrfData, ok := sourceIntf[t.VRF].(map[string]any); ok {
+			if configuredIntf, ok := vrfData["interface"].(string); ok {
+				found = true
+				if configuredIntf != t.Interface {
+					issues = append(issues, fmt.Sprintf("Logging source interface for VRF %s is '%s', expected '%s'",
+						t.VRF, configuredIntf, t.Interface))
+				}
+			}
+		}
+	}
+	if !found {
+		if vrfConfig, ok := loggingData["vrfs"].(map[string]any); ok {
+			if vrfData, ok := vrfConfig[t.VRF].(map[string]any); ok {
+				if configuredIntf, ok := vrfData["sourceInterface"].(string); ok {
 					found = true
 					if configuredIntf != t.Interface {
 						issues = append(issues, fmt.Sprintf("Logging source interface for VRF %s is '%s', expected '%s'",
@@ -273,38 +285,18 @@ func (t *VerifyLoggingSourceIntf) Execute(ctx context.Context, dev device.Device
 				}
 			}
 		}
-
-		// Alternative structure check
-		if !found {
-			if vrfConfig, ok := loggingData["vrfs"].(map[string]any); ok {
-				if vrfData, ok := vrfConfig[t.VRF].(map[string]any); ok {
-					if configuredIntf, ok := vrfData["sourceInterface"].(string); ok {
-						found = true
-						if configuredIntf != t.Interface {
-							issues = append(issues, fmt.Sprintf("Logging source interface for VRF %s is '%s', expected '%s'",
-								t.VRF, configuredIntf, t.Interface))
-						}
-					}
-				}
+	}
+	if !found && t.VRF == "default" {
+		if globalSrcIntf, ok := loggingData["globalSourceInterface"].(string); ok {
+			found = true
+			if globalSrcIntf != t.Interface {
+				issues = append(issues, fmt.Sprintf("Global logging source interface is '%s', expected '%s'",
+					globalSrcIntf, t.Interface))
 			}
 		}
-
-		// Check global source interface if VRF is default
-		if !found && t.VRF == "default" {
-			if globalSrcIntf, ok := loggingData["globalSourceInterface"].(string); ok {
-				found = true
-				if globalSrcIntf != t.Interface {
-					issues = append(issues, fmt.Sprintf("Global logging source interface is '%s', expected '%s'",
-						globalSrcIntf, t.Interface))
-				}
-			}
-		}
-
-		if !found {
-			issues = append(issues, fmt.Sprintf("Logging source interface not configured for VRF %s", t.VRF))
-		}
-	} else {
-		issues = append(issues, "Could not parse logging configuration")
+	}
+	if !found {
+		issues = append(issues, fmt.Sprintf("Logging source interface not configured for VRF %s", t.VRF))
 	}
 
 	if len(issues) > 0 {
@@ -403,58 +395,55 @@ func (t *VerifyLoggingHosts) Execute(ctx context.Context, dev device.Device) (*t
 	issues := []string{}
 	configuredHosts := make(map[string]bool)
 
-	if loggingData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check syslog servers/hosts configuration
-		if syslogServers, ok := loggingData["syslogServers"].([]any); ok {
-			for _, serverData := range syslogServers {
-				if server, ok := serverData.(map[string]any); ok {
-					var serverIP, serverVRF string
-
-					if ip, ok := server["ipAddress"].(string); ok {
-						serverIP = ip
-					} else if host, ok := server["host"].(string); ok {
-						serverIP = host
-					}
-
-					if vrf, ok := server["vrf"].(string); ok {
-						serverVRF = vrf
-					} else {
-						serverVRF = "default" // Default VRF if not specified
-					}
-
-					// Only consider servers in the specified VRF
-					if serverVRF == t.VRF && serverIP != "" {
-						configuredHosts[serverIP] = true
+	loggingData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected logging hosts output: %v", err)
+		return result, nil
+	}
+	if syslogServers, ok := loggingData["syslogServers"].([]any); ok {
+		for _, serverData := range syslogServers {
+			server, ok := serverData.(map[string]any)
+			if !ok {
+				continue
+			}
+			var serverIP, serverVRF string
+			if ip, ok := server["ipAddress"].(string); ok {
+				serverIP = ip
+			} else if host, ok := server["host"].(string); ok {
+				serverIP = host
+			}
+			if vrf, ok := server["vrf"].(string); ok {
+				serverVRF = vrf
+			} else {
+				serverVRF = "default"
+			}
+			if serverVRF == t.VRF && serverIP != "" {
+				configuredHosts[serverIP] = true
+			}
+		}
+	}
+	if hosts, ok := loggingData["hosts"].(map[string]any); ok {
+		if vrfHosts, ok := hosts[t.VRF].([]any); ok {
+			for _, hostData := range vrfHosts {
+				if host, ok := hostData.(map[string]any); ok {
+					if ip, ok := host["ipAddress"].(string); ok {
+						configuredHosts[ip] = true
+					} else if hostAddr, ok := host["host"].(string); ok {
+						configuredHosts[hostAddr] = true
 					}
 				}
 			}
 		}
-
-		// Alternative structure - check hosts
-		if hosts, ok := loggingData["hosts"].(map[string]any); ok {
-			if vrfHosts, ok := hosts[t.VRF].([]any); ok {
-				for _, hostData := range vrfHosts {
-					if host, ok := hostData.(map[string]any); ok {
-						if ip, ok := host["ipAddress"].(string); ok {
-							configuredHosts[ip] = true
-						} else if hostAddr, ok := host["host"].(string); ok {
-							configuredHosts[hostAddr] = true
-						}
-					}
-				}
-			}
-		}
-
-		// Global hosts check for default VRF
-		if t.VRF == "default" {
-			if globalHosts, ok := loggingData["globalHosts"].([]any); ok {
-				for _, hostData := range globalHosts {
-					if host, ok := hostData.(string); ok {
-						configuredHosts[host] = true
-					} else if hostMap, ok := hostData.(map[string]any); ok {
-						if ip, ok := hostMap["ipAddress"].(string); ok {
-							configuredHosts[ip] = true
-						}
+	}
+	if t.VRF == "default" {
+		if globalHosts, ok := loggingData["globalHosts"].([]any); ok {
+			for _, hostData := range globalHosts {
+				if host, ok := hostData.(string); ok {
+					configuredHosts[host] = true
+				} else if hostMap, ok := hostData.(map[string]any); ok {
+					if ip, ok := hostMap["ipAddress"].(string); ok {
+						configuredHosts[ip] = true
 					}
 				}
 			}
@@ -580,27 +569,31 @@ func (t *VerifyLoggingLogsGeneration) Execute(ctx context.Context, dev device.De
 	issues := []string{}
 	logFound := false
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		// Check for log entries
-		if logEntries, ok := logData["logs"].([]any); ok {
-			for _, logEntry := range logEntries {
-				if log, ok := logEntry.(map[string]any); ok {
-					var logMessage string
-					if message, ok := log["message"].(string); ok {
-						logMessage = message
-					} else if text, ok := log["text"].(string); ok {
-						logMessage = text
-					}
-
-					if strings.Contains(logMessage, "ANTA test log message") {
-						logFound = true
-						break
-					}
-				}
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected log output: %v", err)
+		return result, nil
+	}
+	if logEntries, ok := logData["logs"].([]any); ok {
+		for _, logEntry := range logEntries {
+			log, ok := logEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			var logMessage string
+			if message, ok := log["message"].(string); ok {
+				logMessage = message
+			} else if text, ok := log["text"].(string); ok {
+				logMessage = text
+			}
+			if strings.Contains(logMessage, "ANTA test log message") {
+				logFound = true
+				break
 			}
 		}
-
-		// Alternative structure - check messages
+	}
+	if !logFound {
 		if messages, ok := logData["messages"].([]any); ok {
 			for _, messageData := range messages {
 				if msg, ok := messageData.(string); ok {
@@ -751,23 +744,28 @@ func (t *VerifyLoggingHostname) Execute(ctx context.Context, dev device.Device) 
 	issues := []string{}
 	hostnameFound := false
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		if logEntries, ok := logData["logs"].([]any); ok {
-			for _, logEntry := range logEntries {
-				if log, ok := logEntry.(map[string]any); ok {
-					var logMessage string
-					if message, ok := log["message"].(string); ok {
-						logMessage = message
-					} else if text, ok := log["text"].(string); ok {
-						logMessage = text
-					}
-
-					if strings.Contains(logMessage, "ANTA hostname test log") &&
-						strings.Contains(logMessage, deviceHostname) {
-						hostnameFound = true
-						break
-					}
-				}
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected log output: %v", err)
+		return result, nil
+	}
+	if logEntries, ok := logData["logs"].([]any); ok {
+		for _, logEntry := range logEntries {
+			log, ok := logEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			var logMessage string
+			if message, ok := log["message"].(string); ok {
+				logMessage = message
+			} else if text, ok := log["text"].(string); ok {
+				logMessage = text
+			}
+			if strings.Contains(logMessage, "ANTA hostname test log") &&
+				strings.Contains(logMessage, deviceHostname) {
+				hostnameFound = true
+				break
 			}
 		}
 	}
@@ -890,33 +888,35 @@ func (t *VerifyLoggingTimestamp) Execute(ctx context.Context, dev device.Device)
 		regexp.MustCompile(`^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}`), // Full format: Mon Jan  1 12:00:00
 	}
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		if logEntries, ok := logData["logs"].([]any); ok {
-			for _, logEntry := range logEntries {
-				if log, ok := logEntry.(map[string]any); ok {
-					var logMessage string
-					if message, ok := log["message"].(string); ok {
-						logMessage = message
-					} else if text, ok := log["text"].(string); ok {
-						logMessage = text
-					}
-
-					if strings.Contains(logMessage, "ANTA timestamp test log") {
-						// Check if log has a proper timestamp
-						for _, pattern := range timestampPatterns {
-							if pattern.MatchString(logMessage) {
-								timestampFound = true
-								break
-							}
-						}
-
-						// Also check for timestamp field in structured logs
-						if timestamp, ok := log["timestamp"].(string); ok && timestamp != "" {
-							timestampFound = true
-						}
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected log output: %v", err)
+		return result, nil
+	}
+	if logEntries, ok := logData["logs"].([]any); ok {
+		for _, logEntry := range logEntries {
+			log, ok := logEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			var logMessage string
+			if message, ok := log["message"].(string); ok {
+				logMessage = message
+			} else if text, ok := log["text"].(string); ok {
+				logMessage = text
+			}
+			if strings.Contains(logMessage, "ANTA timestamp test log") {
+				for _, pattern := range timestampPatterns {
+					if pattern.MatchString(logMessage) {
+						timestampFound = true
 						break
 					}
 				}
+				if timestamp, ok := log["timestamp"].(string); ok && timestamp != "" {
+					timestampFound = true
+				}
+				break
 			}
 		}
 	}
@@ -999,18 +999,22 @@ func (t *VerifyLoggingAccounting) Execute(ctx context.Context, dev device.Device
 		return result, nil
 	}
 
+	aaaData, err := test.AsMap(aaaResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected AAA accounting output: %v", err)
+		return result, nil
+	}
 	accountingEnabled := false
-	if aaaData, ok := aaaResult.Output.(map[string]any); ok {
-		if accounting, ok := aaaData["accounting"].(map[string]any); ok {
-			if commands, ok := accounting["commands"].(map[string]any); ok {
-				if enabled, ok := commands["enabled"].(bool); ok && enabled {
-					accountingEnabled = true
-				}
+	if accounting, ok := aaaData["accounting"].(map[string]any); ok {
+		if commands, ok := accounting["commands"].(map[string]any); ok {
+			if enabled, ok := commands["enabled"].(bool); ok && enabled {
+				accountingEnabled = true
 			}
-			if exec, ok := accounting["exec"].(map[string]any); ok {
-				if enabled, ok := exec["enabled"].(bool); ok && enabled {
-					accountingEnabled = true
-				}
+		}
+		if exec, ok := accounting["exec"].(map[string]any); ok {
+			if enabled, ok := exec["enabled"].(bool); ok && enabled {
+				accountingEnabled = true
 			}
 		}
 	}
@@ -1038,39 +1042,42 @@ func (t *VerifyLoggingAccounting) Execute(ctx context.Context, dev device.Device
 	issues := []string{}
 	accountingLogsFound := false
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		if logEntries, ok := logData["logs"].([]any); ok {
-			for _, logEntry := range logEntries {
-				if log, ok := logEntry.(map[string]any); ok {
-					var logMessage string
-					if message, ok := log["message"].(string); ok {
-						logMessage = message
-					} else if text, ok := log["text"].(string); ok {
-						logMessage = text
-					}
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected log output: %v", err)
+		return result, nil
+	}
+	if logEntries, ok := logData["logs"].([]any); ok {
+		for _, logEntry := range logEntries {
+			log, ok := logEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			var logMessage string
+			if message, ok := log["message"].(string); ok {
+				logMessage = message
+			} else if text, ok := log["text"].(string); ok {
+				logMessage = text
+			}
 
-					// Look for common AAA accounting log patterns
-					accountingKeywords := []string{
-						"ACCOUNTING",
-						"AAA-ACCOUNTING",
-						"accounting",
-						"cmd=",
-						"user=",
-						"start",
-						"stop",
-					}
-
-					for _, keyword := range accountingKeywords {
-						if strings.Contains(logMessage, keyword) {
-							accountingLogsFound = true
-							break
-						}
-					}
-
-					if accountingLogsFound {
-						break
-					}
+			accountingKeywords := []string{
+				"ACCOUNTING",
+				"AAA-ACCOUNTING",
+				"accounting",
+				"cmd=",
+				"user=",
+				"start",
+				"stop",
+			}
+			for _, keyword := range accountingKeywords {
+				if strings.Contains(logMessage, keyword) {
+					accountingLogsFound = true
+					break
 				}
+			}
+			if accountingLogsFound {
+				break
 			}
 		}
 	}
@@ -1206,47 +1213,47 @@ func (t *VerifyLoggingErrors) Execute(ctx context.Context, dev device.Device) (*
 		cutoffTime = now.Add(-1 * time.Hour) // Default: 1 hour
 	}
 
-	if logData, ok := cmdResult.Output.(map[string]any); ok {
-		if logEntries, ok := logData["logs"].([]any); ok {
-			for _, logEntry := range logEntries {
-				if log, ok := logEntry.(map[string]any); ok {
-					// Check timestamp if available
-					if timestampStr, ok := log["timestamp"].(string); ok {
-						if logTime, err := time.Parse(time.RFC3339, timestampStr); err == nil {
-							if logTime.Before(cutoffTime) {
-								continue // Skip logs outside our time window
-							}
-						}
+	logData, err := test.AsMap(cmdResult.Output)
+	if err != nil {
+		result.Status = test.TestError
+		result.Message = fmt.Sprintf("Unexpected log output: %v", err)
+		return result, nil
+	}
+	if logEntries, ok := logData["logs"].([]any); ok {
+		for _, logEntry := range logEntries {
+			log, ok := logEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			if timestampStr, ok := log["timestamp"].(string); ok {
+				if logTime, err := time.Parse(time.RFC3339, timestampStr); err == nil {
+					if logTime.Before(cutoffTime) {
+						continue
 					}
-
-					var logMessage, severityStr string
-					if message, ok := log["message"].(string); ok {
-						logMessage = message
-					} else if text, ok := log["text"].(string); ok {
-						logMessage = text
-					}
-
-					if severity, ok := log["severity"].(string); ok {
-						severityStr = severity
-					} else {
-						// Try to extract severity from message
-						severityStr = extractSeverityFromMessage(logMessage)
-					}
-
-					// Check for error-level messages
-					severityLevel := parseSeverityLevel(severityStr)
-					if severityLevel <= 3 { // Error level or higher (0=emergency, 1=alert, 2=critical, 3=error)
-						switch severityLevel {
-						case 0:
-							emergencyCount++
-						case 1:
-							alertCount++
-						case 2:
-							criticalCount++
-						case 3:
-							errorCount++
-						}
-					}
+				}
+			}
+			var logMessage, severityStr string
+			if message, ok := log["message"].(string); ok {
+				logMessage = message
+			} else if text, ok := log["text"].(string); ok {
+				logMessage = text
+			}
+			if severity, ok := log["severity"].(string); ok {
+				severityStr = severity
+			} else {
+				severityStr = extractSeverityFromMessage(logMessage)
+			}
+			severityLevel := parseSeverityLevel(severityStr)
+			if severityLevel <= 3 {
+				switch severityLevel {
+				case 0:
+					emergencyCount++
+				case 1:
+					alertCount++
+				case 2:
+					criticalCount++
+				case 3:
+					errorCount++
 				}
 			}
 		}
