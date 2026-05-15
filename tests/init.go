@@ -25,6 +25,7 @@ func RegisterAllTests() {
 	registry := test.GetRegistry()
 
 	_ = registry.Register("connectivity", "VerifyReachability", connectivity.NewVerifyReachability)
+	_ = registry.Register("connectivity", "VerifyTraceroute", connectivity.NewVerifyTraceroute)
 	_ = registry.Register("connectivity", "VerifyLLDPNeighbors", connectivity.NewVerifyLLDPNeighbors)
 
 	// EVPN Tests
