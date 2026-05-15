@@ -60,11 +60,21 @@ tests:
         - "Arista Networks"
         - "Finisar"
 
-  - name: "VerifyPowerSupplies"
+  # VerifyPowerSupplies was previously an alias-shim that forwarded to
+  # VerifyInventory. It was removed because:
+  #   - PSU *count* is covered by VerifyInventory.minimum_supplies.
+  #   - PSU *state* is covered by VerifyEnvironmentPower (every supply
+  #     must be Ok; optional check_voltage + min/max_input_voltage).
+  # Use both together instead.
+  - name: "VerifyInventory"
     module: "hardware"
     categories: ["hardware", "power"]
     inputs:
       minimum_supplies: 10
+
+  - name: "VerifyEnvironmentPower"
+    module: "hardware"
+    categories: ["hardware", "power"]
 
   - name: "VerifyChassisHealth"
     module: "hardware"
