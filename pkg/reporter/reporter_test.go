@@ -468,6 +468,133 @@ func TestRender_IssuesList(t *testing.T) {
 	}
 }
 
+func TestRender_InterfaceStatusTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyInterfacesStatus",
+				DeviceName: "tor1",
+				Status:     test.TestFailure,
+				Details: map[string]any{
+					"interface_status": []any{
+						map[string]any{
+							"interface":         "Ethernet1/1",
+							"expected_status":   "up",
+							"actual_status":     "up",
+							"expected_protocol": "up",
+							"actual_protocol":   "up",
+							"status":            "ok",
+						},
+						map[string]any{
+							"interface":         "Ethernet26/1",
+							"expected_status":   "up",
+							"actual_status":     "down",
+							"expected_protocol": "up",
+							"actual_protocol":   "down",
+							"status":            "mismatch",
+						},
+						map[string]any{
+							"interface":         "loopback0",
+							"expected_status":   "up",
+							"expected_protocol": "up",
+							"status":            "missing",
+						},
+					},
+				},
+			},
+		},
+	}
+	body, err := RenderToBytes(r)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	s := string(body)
+	for _, want := range []string{
+		`class="detail"`,
+		`class="icon port"`,
+		`class="pill success"`,
+		`class="pill failure"`,
+		"Ethernet1/1",
+		"Ethernet26/1",
+		"loopback0",
+		"mismatch",
+		"missing",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+	if strings.Contains(s, `"interface_status":`) {
+		t.Errorf("interface_status should render as table, not as raw JSON")
+	}
+}
+
+func TestRender_LLDPNeighborsTable(t *testing.T) {
+	r := &Report{
+		Started: time.Now(),
+		Devices: []DeviceInfo{{Name: "tor1", Connected: true}},
+		Results: []test.TestResult{
+			{
+				TestName:   "VerifyLLDPNeighbors",
+				DeviceName: "tor1",
+				Status:     test.TestFailure,
+				Details: map[string]any{
+					"lldp_neighbors": []any{
+						map[string]any{
+							"interface":       "Ethernet1",
+							"expected_device": "spine1",
+							"actual_device":   "spine1",
+							"expected_port":   "Ethernet1",
+							"actual_port":     "Ethernet1",
+							"status":          "ok",
+						},
+						map[string]any{
+							"interface":       "Ethernet2",
+							"expected_device": "spine2",
+							"actual_device":   "spine3",
+							"expected_port":   "Ethernet1",
+							"actual_port":     "Ethernet9",
+							"status":          "mismatch",
+						},
+						map[string]any{
+							"interface":       "Ethernet10/1",
+							"expected_device": "leaf5",
+							"expected_port":   "Ethernet1/1",
+							"status":          "missing",
+						},
+					},
+				},
+			},
+		},
+	}
+	body, err := RenderToBytes(r)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	s := string(body)
+	for _, want := range []string{
+		`class="detail"`,
+		`class="icon port"`,
+		`class="pill success"`,
+		`class="pill failure"`,
+		"Ethernet1",
+		"spine1",
+		"spine3",
+		"Ethernet10/1",
+		"mismatch",
+		"missing",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("rendered HTML missing %q", want)
+		}
+	}
+	if strings.Contains(s, `"lldp_neighbors":`) {
+		t.Errorf("lldp_neighbors should render as table, not as raw JSON")
+	}
+}
+
 func TestRender_StatusOrdering(t *testing.T) {
 	// Errors then failures then successes inside a device — failures
 	// should appear before successes in the markup.

@@ -3,7 +3,6 @@ package hardware
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/fluidstackio/go-anta/pkg/device"
 	"github.com/fluidstackio/go-anta/pkg/platform"
@@ -79,9 +78,11 @@ func NewVerifyInventory(inputs map[string]any) (test.Test, error) {
 	return t, nil
 }
 
-// InventoryModule is one row from `show inventory`'s
-// systemInformation list — chassis, supervisors, line cards,
-// power supplies, fan trays.
+// InventoryModule is one row from `show inventory` — chassis,
+// supervisors, line cards, power supplies, fan trays. EOS groups
+// these into multiple top-level slot arrays (powerSupplySlots,
+// fanTraySlots, supervisorSlots, cardSlots) plus a singleton
+// `systemInformation` object for the chassis itself.
 type InventoryModule struct {
 	Name        string `json:"name"`
 	Model       string `json:"model,omitempty"`
@@ -202,35 +203,38 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 	}
 	if invResult, err := dev.Execute(ctx, invCmd); err == nil {
 		if invData, ok := invResult.Output.(map[string]any); ok {
-			if systemInfo, ok := invData["systemInformation"].([]any); ok {
-				for _, item := range systemInfo {
-					m, ok := item.(map[string]any)
-					if !ok {
-						continue
-					}
-					row := InventoryModule{}
-					if v, ok := m["name"].(string); ok {
-						row.Name = v
-						moduleNames[v] = true
-						if strings.HasPrefix(v, "PowerSupply") {
-							powerSupplyCount++
-						}
-					}
-					if v, ok := m["modelName"].(string); ok {
-						row.Model = v
-						moduleNames[v] = true
-					}
-					if v, ok := m["serialNumber"].(string); ok {
-						row.Serial = v
-					}
-					if v, ok := m["hardwareRevision"].(string); ok {
-						row.HwRevision = v
-					}
-					if v, ok := m["description"].(string); ok {
-						row.Description = v
-					}
+			// systemInformation is a singleton chassis object on EOS,
+			// not a list. Render it as the first row when present.
+			if chassis, ok := invData["systemInformation"].(map[string]any); ok {
+				row := inventoryRow("Chassis", chassis)
+				if row.Name != "" || row.Model != "" || row.Serial != "" {
 					modulesList = append(modulesList, row)
+					if row.Name != "" {
+						moduleNames[row.Name] = true
+					}
+					if row.Model != "" {
+						moduleNames[row.Model] = true
+					}
 				}
+			}
+			// Each slot category (PSUs, fans, supervisors, cards) is a
+			// separate top-level field that EOS returns as either a
+			// {label → entry} map or a [entry,…] list depending on the
+			// platform — walkContainer handles both.
+			for _, key := range []string{"powerSupplySlots", "fanTraySlots", "supervisorSlots", "cardSlots"} {
+				walkContainer(invData[key], func(slotName string, entry map[string]any) {
+					row := inventoryRow(slotName, entry)
+					modulesList = append(modulesList, row)
+					if row.Name != "" {
+						moduleNames[row.Name] = true
+					}
+					if row.Model != "" {
+						moduleNames[row.Model] = true
+					}
+					if key == "powerSupplySlots" {
+						powerSupplyCount++
+					}
+				})
 			}
 		}
 	}
@@ -261,6 +265,29 @@ func (t *VerifyInventory) Execute(ctx context.Context, dev device.Device) (*test
 	result.Details = details
 
 	return result, nil
+}
+
+// inventoryRow extracts a module/slot record. The slot name often only
+// appears as the map key (e.g. "PowerSupply1"); some platforms also
+// echo it inside the entry as `name`.
+func inventoryRow(fallbackName string, m map[string]any) InventoryModule {
+	row := InventoryModule{Name: fallbackName}
+	if v, ok := m["name"].(string); ok && v != "" {
+		row.Name = v
+	}
+	if v, ok := m["modelName"].(string); ok {
+		row.Model = v
+	}
+	if v, ok := m["serialNumber"].(string); ok {
+		row.Serial = v
+	}
+	if v, ok := m["hardwareRevision"].(string); ok {
+		row.HwRevision = v
+	}
+	if v, ok := m["description"].(string); ok {
+		row.Description = v
+	}
+	return row
 }
 
 func (t *VerifyInventory) ValidateInput(input any) error {

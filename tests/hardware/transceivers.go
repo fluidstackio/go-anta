@@ -515,8 +515,11 @@ func (t *VerifyTransceiversTemperature) Execute(ctx context.Context, dev device.
 		return skipResult, nil
 	}
 
+	// `show interfaces transceiver temperature` doesn't exist on modern
+	// EOS — fall back to `detail`, which carries both the current value
+	// and the per-metric threshold sub-object the check below needs.
 	cmd := device.Command{
-		Template: "show interfaces transceiver temperature",
+		Template: "show interfaces transceiver detail",
 		Format:   "json",
 		UseCache: false,
 	}
@@ -529,80 +532,88 @@ func (t *VerifyTransceiversTemperature) Execute(ctx context.Context, dev device.
 	}
 
 	temperatureIssues := []string{}
+	rows := []map[string]any{}
 
 	if tempData, ok := cmdResult.Output.(map[string]any); ok {
 		if interfaces, ok := tempData["interfaces"].(map[string]any); ok {
 			for intfName, intfData := range interfaces {
-				if intf, ok := intfData.(map[string]any); ok {
-					if err := t.checkTransceiverTemperature(intfName, intf, &temperatureIssues); err != nil {
-						temperatureIssues = append(temperatureIssues, fmt.Sprintf("%s: %v", intfName, err))
-					}
+				intf, ok := intfData.(map[string]any)
+				if !ok {
+					continue
+				}
+				if row := t.checkTransceiverTemperature(intfName, intf, &temperatureIssues); row != nil {
+					rows = append(rows, row)
 				}
 			}
 		}
 	}
 
+	// Populate Details with a `temperatures` block so the reporter
+	// renders a proper table (same shape VerifyEnvironmentTemperature
+	// uses — name/description/current_c/overheat_c/critical_c/status).
+	if len(rows) > 0 {
+		result.Details = map[string]any{"temperatures": rows}
+	}
+
 	if len(temperatureIssues) > 0 {
 		result.Status = test.TestFailure
 		result.Message = fmt.Sprintf("Transceiver temperature issues: %v", temperatureIssues)
+	} else {
+		result.Message = fmt.Sprintf("%d transceivers within temperature limits", len(rows))
 	}
 
 	return result, nil
 }
 
-func (t *VerifyTransceiversTemperature) checkTransceiverTemperature(intfName string, data map[string]any, issues *[]string) error {
-	// Try different possible field names for temperature data
-	tempFields := []string{"temperature", "temp", "currentTemp"}
-	alarmFields := []string{"highAlarmThreshold", "tempHighAlarm", "highAlarm"}
-	warningFields := []string{"highWarningThreshold", "tempHighWarning", "highWarning"}
-
-	var currentTemp, highAlarm, highWarning float64
-	var tempFound, alarmFound, warningFound bool
-
-	// Extract current temperature
-	for _, field := range tempFields {
-		if temp, ok := data[field].(float64); ok {
-			currentTemp = temp
-			tempFound = true
-			break
-		}
+// checkTransceiverTemperature appends any threshold violation to issues
+// and returns a row for the report table (or nil for empty cages /
+// missing temperature data).
+func (t *VerifyTransceiversTemperature) checkTransceiverTemperature(intfName string, data map[string]any, issues *[]string) map[string]any {
+	// Skip empty cages: no media installed, no readings to check.
+	_, mediaOK := data["mediaType"].(string)
+	_, snOK := data["vendorSn"].(string)
+	if !mediaOK && !snOK {
+		return nil
 	}
 
-	// Extract high alarm threshold
-	for _, field := range alarmFields {
-		if alarm, ok := data[field].(float64); ok {
-			highAlarm = alarm
-			alarmFound = true
-			break
-		}
+	currentTemp, ok := data["temperature"].(float64)
+	if !ok || currentTemp == 0 {
+		return nil
 	}
 
-	// Extract high warning threshold
-	for _, field := range warningFields {
-		if warning, ok := data[field].(float64); ok {
-			highWarning = warning
-			warningFound = true
-			break
-		}
+	highAlarm, highWarn, _, _, _ := metricThresholds(asMapOrNil(data["details"]), "temperature")
+
+	row := map[string]any{
+		"name":      intfName,
+		"current_c": currentTemp,
+	}
+	if media, ok := data["mediaType"].(string); ok {
+		row["description"] = media
+	}
+	if highWarn > 0 {
+		row["overheat_c"] = highWarn
+	}
+	if highAlarm > 0 {
+		row["critical_c"] = highAlarm
 	}
 
-	if !tempFound {
-		return fmt.Errorf("temperature data not available")
-	}
-
-	// Check against high alarm threshold
-	if alarmFound && currentTemp >= highAlarm {
+	switch {
+	case highAlarm > 0 && currentTemp >= highAlarm:
 		*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C exceeds high alarm threshold %.1f°C", intfName, currentTemp, highAlarm))
-	}
-
-	// Check against high warning threshold with margin
-	if warningFound {
-		warningWithMargin := highWarning - t.TempWarningMargin
-		if currentTemp >= warningWithMargin {
-			*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C approaching warning threshold %.1f°C (margin: %.1f°C)", intfName, currentTemp, highWarning, t.TempWarningMargin))
+		row["status"] = "alarm"
+	case highWarn > 0:
+		if currentTemp >= highWarn-t.TempWarningMargin {
+			*issues = append(*issues, fmt.Sprintf("%s: temperature %.1f°C approaching warning threshold %.1f°C (margin: %.1f°C)", intfName, currentTemp, highWarn, t.TempWarningMargin))
 		}
 	}
 
+	return row
+}
+
+func asMapOrNil(v any) map[string]any {
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
 	return nil
 }
 

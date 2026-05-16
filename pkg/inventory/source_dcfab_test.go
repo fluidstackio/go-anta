@@ -112,13 +112,13 @@ func TestDcfabSource_EndpointDefaults(t *testing.T) {
 		{"dev", "https://dcfab.fluidstack.xyz"},
 	}
 	for _, tc := range cases {
-		got := dcfabEndpoint(DcfabConfig{Env: tc.env})
+		got := DcfabEndpoint(DcfabConfig{Env: tc.env})
 		if got != tc.want {
 			t.Errorf("env=%q: got %q want %q", tc.env, got, tc.want)
 		}
 	}
 	// Explicit Endpoint wins.
-	custom := dcfabEndpoint(DcfabConfig{Env: "prod", Endpoint: "https://custom.test"})
+	custom := DcfabEndpoint(DcfabConfig{Env: "prod", Endpoint: "https://custom.test"})
 	if custom != "https://custom.test" {
 		t.Errorf("explicit endpoint should win, got %q", custom)
 	}

@@ -142,32 +142,49 @@ func (t *VerifyInterfacesStatus) Execute(ctx context.Context, dev device.Device)
 		}
 	}
 
-	failures := []string{}
+	rows := make([]map[string]any, 0, len(t.Interfaces))
+	failed := 0
 
 	for _, expectedIntf := range t.Interfaces {
 		deviceIntf, found := deviceInterfaces[expectedIntf.Name]
 
+		row := map[string]any{
+			"interface":         expectedIntf.Name,
+			"expected_status":   expectedIntf.Status,
+			"expected_protocol": expectedIntf.Protocol,
+		}
+
 		if !found {
-			failures = append(failures, fmt.Sprintf("Interface %s not found", expectedIntf.Name))
+			row["status"] = "missing"
+			rows = append(rows, row)
+			failed++
 			continue
 		}
 
-		// Check interface status
-		if expectedIntf.Status != "" && deviceIntf.Status != expectedIntf.Status {
-			failures = append(failures, fmt.Sprintf("Interface %s: expected status '%s', got '%s'",
-				expectedIntf.Name, expectedIntf.Status, deviceIntf.Status))
-		}
+		row["actual_status"] = deviceIntf.Status
+		row["actual_protocol"] = deviceIntf.Protocol
 
-		// Check line protocol status
-		if expectedIntf.Protocol != "" && deviceIntf.Protocol != expectedIntf.Protocol {
-			failures = append(failures, fmt.Sprintf("Interface %s: expected protocol '%s', got '%s'",
-				expectedIntf.Name, expectedIntf.Protocol, deviceIntf.Protocol))
+		mismatch := false
+		if expectedIntf.Status != "" && deviceIntf.Status != expectedIntf.Status {
+			mismatch = true
 		}
+		if expectedIntf.Protocol != "" && deviceIntf.Protocol != expectedIntf.Protocol {
+			mismatch = true
+		}
+		if mismatch {
+			row["status"] = "mismatch"
+			failed++
+		} else {
+			row["status"] = "ok"
+		}
+		rows = append(rows, row)
 	}
 
-	if len(failures) > 0 {
+	result.Details = map[string]any{"interface_status": rows}
+
+	if failed > 0 {
 		result.Status = test.TestFailure
-		result.Message = fmt.Sprintf("Interface status failures: %v", failures)
+		result.Message = fmt.Sprintf("%d of %d interfaces in unexpected state", failed, len(t.Interfaces))
 	}
 
 	return result, nil
