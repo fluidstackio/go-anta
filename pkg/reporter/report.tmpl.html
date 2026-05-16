@@ -477,6 +477,10 @@
                 {{- template "ifaceErrorsTable" . }}
               {{- else if eq .Kind "modules" }}
                 {{- template "modulesTable" . }}
+              {{- else if eq .Kind "interfaceStatus" }}
+                {{- template "interfaceStatusTable" . }}
+              {{- else if eq .Kind "lldpNeighbors" }}
+                {{- template "lldpNeighborsTable" . }}
               {{- else if eq .Kind "summary" }}
                 {{- template "summaryGrid" . }}
               {{- else if eq .Kind "issues" }}
@@ -698,6 +702,72 @@
       <td class="mono">{{ if .Serial }}{{ .Serial }}{{ else }}—{{ end }}</td>
       <td class="mono">{{ if .HwRevision }}{{ .HwRevision }}{{ else }}—{{ end }}</td>
       <td>{{ if .Description }}{{ .Description }}{{ else }}—{{ end }}</td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "interfaceStatusTable" }}
+<table class="detail">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Interface</th>
+      <th>Status (expected → actual)</th>
+      <th>Protocol (expected → actual)</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{- range .InterfaceStatus }}
+    <tr>
+      <td>{{ template "portIcon" }}</td>
+      <td class="mono">{{ .Interface }}</td>
+      <td class="mono">
+        {{ if .ExpectedStatus }}{{ .ExpectedStatus }}{{ else }}—{{ end }}
+        →
+        {{ if .ActualStatus }}{{ .ActualStatus }}{{ else }}—{{ end }}
+      </td>
+      <td class="mono">
+        {{ if .ExpectedProtocol }}{{ .ExpectedProtocol }}{{ else }}—{{ end }}
+        →
+        {{ if .ActualProtocol }}{{ .ActualProtocol }}{{ else }}—{{ end }}
+      </td>
+      <td><span class="pill {{ .StatusClass }}">{{ .Status }}</span></td>
+    </tr>
+    {{- end }}
+  </tbody>
+</table>
+{{ end }}
+
+{{ define "lldpNeighborsTable" }}
+<table class="detail">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Interface</th>
+      <th>Neighbor (expected → actual)</th>
+      <th>Port (expected → actual)</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{- range .LLDPNeighbors }}
+    <tr>
+      <td>{{ template "portIcon" }}</td>
+      <td class="mono">{{ .Interface }}</td>
+      <td class="mono">
+        {{ if .ExpectedDevice }}{{ .ExpectedDevice }}{{ else }}<span style="color:var(--muted)">any</span>{{ end }}
+        →
+        {{ if .ActualDevice }}{{ .ActualDevice }}{{ else }}—{{ end }}
+      </td>
+      <td class="mono">
+        {{ if .ExpectedPort }}{{ .ExpectedPort }}{{ else }}<span style="color:var(--muted)">any</span>{{ end }}
+        →
+        {{ if .ActualPort }}{{ .ActualPort }}{{ else }}—{{ end }}
+      </td>
+      <td><span class="pill {{ .StatusClass }}">{{ .Status }}</span></td>
     </tr>
     {{- end }}
   </tbody>

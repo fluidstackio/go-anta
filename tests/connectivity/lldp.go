@@ -144,29 +144,49 @@ func (t *VerifyLLDPNeighbors) Execute(ctx context.Context, dev device.Device) (*
 		}
 	}
 
-	failures := []string{}
+	rows := make([]map[string]any, 0, len(t.Interfaces))
+	failed := 0
+
 	for _, intf := range t.Interfaces {
 		neighbor, found := lldpNeighbors[intf.Interface]
 
+		row := map[string]any{
+			"interface":       intf.Interface,
+			"expected_device": intf.NeighborDevice,
+			"expected_port":   intf.NeighborPort,
+		}
+
 		if !found {
-			failures = append(failures, fmt.Sprintf("%s: no LLDP neighbor found", intf.Interface))
+			row["status"] = "missing"
+			rows = append(rows, row)
+			failed++
 			continue
 		}
 
-		if intf.NeighborDevice != "" && !lldpHostMatches(neighbor.SystemName, intf.NeighborDevice) {
-			failures = append(failures, fmt.Sprintf("%s: expected neighbor %s, got %s",
-				intf.Interface, intf.NeighborDevice, neighbor.SystemName))
-		}
+		row["actual_device"] = neighbor.SystemName
+		row["actual_port"] = neighbor.PortDesc
 
-		if intf.NeighborPort != "" && !strings.EqualFold(neighbor.PortDesc, intf.NeighborPort) {
-			failures = append(failures, fmt.Sprintf("%s: expected neighbor port %s, got %s",
-				intf.Interface, intf.NeighborPort, neighbor.PortDesc))
+		mismatch := false
+		if intf.NeighborDevice != "" && !lldpHostMatches(neighbor.SystemName, intf.NeighborDevice) {
+			mismatch = true
 		}
+		if intf.NeighborPort != "" && !strings.EqualFold(neighbor.PortDesc, intf.NeighborPort) {
+			mismatch = true
+		}
+		if mismatch {
+			row["status"] = "mismatch"
+			failed++
+		} else {
+			row["status"] = "ok"
+		}
+		rows = append(rows, row)
 	}
 
-	if len(failures) > 0 {
+	result.Details = map[string]any{"lldp_neighbors": rows}
+
+	if failed > 0 {
 		result.Status = test.TestFailure
-		result.Message = fmt.Sprintf("LLDP verification failures: %v", failures)
+		result.Message = fmt.Sprintf("%d of %d LLDP neighbors not as expected", failed, len(t.Interfaces))
 	}
 
 	return result, nil

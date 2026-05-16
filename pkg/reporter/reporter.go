@@ -91,17 +91,19 @@ type testView struct {
 // detailBlock is one rendered section under a test's Details. Kind
 // selects the template path; only the matching fields are populated.
 type detailBlock struct {
-	Kind        string // "fans" | "psus" | "temps" | "optics" | "ifaceErrors" | "modules" | "summary" | "issues" | "json"
-	Title       string
-	Fans        []fanRow
-	PSUs        []psuRow
-	Temps       []tempRow
-	Optics      []opticRow
-	IfaceErrors []ifaceErrorRow
-	Modules     []moduleRow
-	KV          []kvRow
-	Items       []string // for "issues"
-	JSON        string   // for "json"
+	Kind            string // "fans" | "psus" | "temps" | "optics" | "ifaceErrors" | "modules" | "summary" | "issues" | "interfaceStatus" | "lldpNeighbors" | "json"
+	Title           string
+	Fans            []fanRow
+	PSUs            []psuRow
+	Temps           []tempRow
+	Optics          []opticRow
+	IfaceErrors     []ifaceErrorRow
+	Modules         []moduleRow
+	KV              []kvRow
+	Items           []string // for "issues"
+	InterfaceStatus []interfaceStatusRow
+	LLDPNeighbors   []lldpNeighborRow
+	JSON            string // for "json"
 }
 
 type fanRow struct {
@@ -177,6 +179,26 @@ type ifaceErrorRow struct {
 type kvRow struct {
 	Label string
 	Value string
+}
+
+type interfaceStatusRow struct {
+	Interface        string
+	ExpectedStatus   string
+	ActualStatus     string
+	ExpectedProtocol string
+	ActualProtocol   string
+	Status           string // "ok" | "missing" | "mismatch"
+	StatusClass      string // "success" | "failure"
+}
+
+type lldpNeighborRow struct {
+	Interface      string
+	ExpectedDevice string
+	ActualDevice   string
+	ExpectedPort   string
+	ActualPort     string
+	Status         string // "ok" | "missing" | "mismatch"
+	StatusClass    string // "success" | "failure"
 }
 
 type statsView struct {
@@ -353,6 +375,14 @@ func renderDetails(d any) (blocks []detailBlock, jsonFallback string) {
 	if mods, ok := m["modules"].([]any); ok {
 		blocks = append(blocks, modulesBlock(mods))
 		consumed["modules"] = true
+	}
+	if ifaces, ok := m["interface_status"].([]any); ok {
+		blocks = append(blocks, interfaceStatusBlock(ifaces))
+		consumed["interface_status"] = true
+	}
+	if lldp, ok := m["lldp_neighbors"].([]any); ok {
+		blocks = append(blocks, lldpNeighborsBlock(lldp))
+		consumed["lldp_neighbors"] = true
 	}
 	if issues, ok := m["issues"].([]any); ok && len(issues) > 0 {
 		var list []string
@@ -532,6 +562,62 @@ func modulesBlock(items []any) detailBlock {
 			HwRevision:  strVal(m, "hw_revision"),
 			Description: strVal(m, "description"),
 		})
+	}
+	return out
+}
+
+func interfaceStatusBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "interfaceStatus", Title: "Interface status"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := interfaceStatusRow{
+			Interface:        strVal(m, "interface"),
+			ExpectedStatus:   strVal(m, "expected_status"),
+			ActualStatus:     strVal(m, "actual_status"),
+			ExpectedProtocol: strVal(m, "expected_protocol"),
+			ActualProtocol:   strVal(m, "actual_protocol"),
+			Status:           strVal(m, "status"),
+		}
+		switch row.Status {
+		case "ok":
+			row.StatusClass = "success"
+		case "missing", "mismatch":
+			row.StatusClass = "failure"
+		default:
+			row.StatusClass = ""
+		}
+		out.InterfaceStatus = append(out.InterfaceStatus, row)
+	}
+	return out
+}
+
+func lldpNeighborsBlock(items []any) detailBlock {
+	out := detailBlock{Kind: "lldpNeighbors", Title: "LLDP neighbors"}
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		row := lldpNeighborRow{
+			Interface:      strVal(m, "interface"),
+			ExpectedDevice: strVal(m, "expected_device"),
+			ActualDevice:   strVal(m, "actual_device"),
+			ExpectedPort:   strVal(m, "expected_port"),
+			ActualPort:     strVal(m, "actual_port"),
+			Status:         strVal(m, "status"),
+		}
+		switch row.Status {
+		case "ok":
+			row.StatusClass = "success"
+		case "missing", "mismatch":
+			row.StatusClass = "failure"
+		default:
+			row.StatusClass = ""
+		}
+		out.LLDPNeighbors = append(out.LLDPNeighbors, row)
 	}
 	return out
 }

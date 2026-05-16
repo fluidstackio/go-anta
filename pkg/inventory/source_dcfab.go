@@ -51,9 +51,9 @@ func (s *DcfabSource) SetRegion(region string) { s.cfg.Region = region }
 // constructed. Used by the CLI --filter flag.
 func (s *DcfabSource) SetFilter(filter string) { s.cfg.Filter = filter }
 
-// dcfabEndpoint resolves the HTTPS endpoint from the config. Explicit
+// DcfabEndpoint resolves the HTTPS endpoint from the config. Explicit
 // Endpoint wins; otherwise Env selects between prod/dev defaults.
-func dcfabEndpoint(cfg DcfabConfig) string {
+func DcfabEndpoint(cfg DcfabConfig) string {
 	if cfg.Endpoint != "" {
 		return cfg.Endpoint
 	}
@@ -147,7 +147,7 @@ const dcfabPaginationCap = 5000
 const dcfabHTTPTimeout = 30 * time.Second
 
 func (s *DcfabSource) Load(ctx context.Context) (*Inventory, error) {
-	endpoint := dcfabEndpoint(s.cfg)
+	endpoint := DcfabEndpoint(s.cfg)
 	u := s.queryURL(endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
